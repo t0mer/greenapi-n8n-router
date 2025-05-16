@@ -1,0 +1,7 @@
+green_api:
+  instance_id: "your-instance-id"
+  token: "your-api-token"
+
+routes:
+  1234567890@c.us: "https://n8n.local/webhook/route1"
+  9876543210@c.us: "https://n8n.local/webhook/route2"

@@ -1,0 +1,8 @@
+
+services:
+  greenapi-n8n-router:
+    image: techblog/greenapi-n8n-router
+    container_name: greenapi-n8n-router
+    volumes:
+      - ./app/config/config.yaml:/app/config/config.yaml
+    restart: unless-stopped

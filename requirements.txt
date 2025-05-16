@@ -1,0 +1,6 @@
+httpx
+pyyaml
+loguru
+watchdog
+nest_asyncio
+whatsapp_chatbot_python
