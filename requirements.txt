@@ -1,6 +1,9 @@
 httpx
 pyyaml
 loguru
+fastapi
+uvicorn
 watchdog
+sqlite-utils
 nest_asyncio
 whatsapp_chatbot_python
