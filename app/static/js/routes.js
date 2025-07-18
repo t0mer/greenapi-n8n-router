@@ -507,7 +507,13 @@ class RoutesManager {
         };
 
         if (this.routes.find(route => route.id === newRoute.chat_id)) {
-            alert('Chat ID already exists! Please choose a different ID.');
+            Swal.fire({
+                title: 'Chat ID Already Exists!',
+                text: 'A route with this Chat ID already exists. Please choose a different Chat ID.',
+                icon: 'warning',
+                confirmButtonColor: '#2196F3',
+                confirmButtonText: 'OK'
+            });
             return;
         }
 
@@ -528,11 +534,21 @@ class RoutesManager {
                 this.showNotification('Route created successfully!', 'success');
             } else {
                 const error = await response.text();
-                alert(`Failed to create route: ${error}`);
+                Swal.fire({
+                    title: 'Error!',
+                    text: `Failed to create route: ${error}`,
+                    icon: 'error',
+                    confirmButtonColor: '#dc3545'
+                });
             }
         } catch (error) {
             console.error('Error creating route:', error);
-            alert('Failed to create route. Server may be unavailable.');
+            Swal.fire({
+                title: 'Error!',
+                text: 'Failed to create route. Server may be unavailable.',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
         }
     }
 
@@ -901,6 +917,127 @@ class RoutesManager {
                 icon: 'error',
                 confirmButtonColor: '#dc3545'
             });
+        }
+    }
+
+    enableWebhookEdit(webhookItem) {
+        const urlSpan = webhookItem.querySelector('.webhook-url');
+        const editInput = webhookItem.querySelector('.webhook-edit-input');
+        const editBtn = webhookItem.querySelector('.edit-webhook-btn');
+        const deleteBtn = webhookItem.querySelector('.delete-webhook-btn');
+        const editControls = webhookItem.querySelector('.webhook-edit-controls');
+
+        urlSpan.style.display = 'none';
+        editInput.style.display = 'inline-block';
+        editBtn.style.display = 'none';
+        deleteBtn.style.display = 'none';
+        editControls.style.display = 'flex';
+
+        editInput.focus();
+        editInput.select();
+    }
+
+    cancelWebhookEdit(webhookItem) {
+        const urlSpan = webhookItem.querySelector('.webhook-url');
+        const editInput = webhookItem.querySelector('.webhook-edit-input');
+        const editBtn = webhookItem.querySelector('.edit-webhook-btn');
+        const deleteBtn = webhookItem.querySelector('.delete-webhook-btn');
+        const editControls = webhookItem.querySelector('.webhook-edit-controls');
+
+        // Reset input to original value
+        editInput.value = urlSpan.textContent;
+
+        urlSpan.style.display = 'inline';
+        editInput.style.display = 'none';
+        editBtn.style.display = 'inline-block';
+        deleteBtn.style.display = 'inline-block';
+        editControls.style.display = 'none';
+    }
+
+    async saveWebhookEdit(webhookItem, route, modal) {
+        const urlSpan = webhookItem.querySelector('.webhook-url');
+        const editInput = webhookItem.querySelector('.webhook-edit-input');
+        const newUrl = editInput.value.trim();
+        const webhookIndex = parseInt(webhookItem.dataset.index);
+
+        if (!newUrl) {
+            Swal.fire({
+                title: 'Error!',
+                text: 'Webhook URL cannot be empty',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+            return;
+        }
+
+        try {
+            // Show loading on save button
+            const saveBtn = webhookItem.querySelector('.save-webhook-btn');
+            saveBtn.textContent = '⏳';
+            saveBtn.disabled = true;
+
+            // Update the webhooks array
+            const updatedUrls = [...route.webhookUrls];
+            updatedUrls[webhookIndex] = newUrl;
+
+            const response = await fetch(`/routes/${route.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    chat_id: route.id,
+                    target_urls: updatedUrls
+                })
+            });
+
+            if (response.ok) {
+                // Update the route in memory
+                route.webhookUrls[webhookIndex] = newUrl;
+                if (webhookIndex === 0) {
+                    route.webhookUrl = newUrl; // Update primary URL if it's the first one
+                }
+
+                // Update the display
+                urlSpan.textContent = newUrl;
+                urlSpan.title = newUrl;
+                
+                this.cancelWebhookEdit(webhookItem);
+                
+                Swal.fire({
+                    title: 'Updated!',
+                    text: 'Webhook URL updated successfully!',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+
+                // Update the main card if this was the primary URL
+                if (webhookIndex === 0) {
+                    this.updateCardDisplay(route.id, newUrl);
+                }
+            } else {
+                const error = await response.text();
+                Swal.fire({
+                    title: 'Error!',
+                    text: `Failed to update webhook URL: ${error}`,
+                    icon: 'error',
+                    confirmButtonColor: '#dc3545'
+                });
+                saveBtn.textContent = '✅';
+                saveBtn.disabled = false;
+            }
+        } catch (error) {
+            console.error('Error updating webhook URL:', error);
+            Swal.fire({
+                title: 'Error!',
+                text: 'Failed to update webhook URL. Server may be unavailable.',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+            const saveBtn = webhookItem.querySelector('.save-webhook-btn');
+            saveBtn.textContent = '✅';
+            saveBtn.disabled = false;
         }
     }
 

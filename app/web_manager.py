@@ -19,6 +19,10 @@ config = load_config(CONFIG_PATH)
 
 templates = Jinja2Templates(directory="templates")
 
+class RouteCreate(BaseModel):
+    chat_id: str
+    target_urls: list[str]
+
 class RouteUpdate(BaseModel):
     chat_id: str
     target_urls: list[str]
@@ -149,13 +153,12 @@ def get_routes():
     }
 
 @app.post("/routes")
-def add_route(chat_id: str, target_urls: list[str]):
+def add_route(route_data: RouteCreate):
     """
     Adds a new route for a chat ID.
 
     Args:
-        chat_id (str): The chat ID.
-        target_urls (list[str]): List of webhook URLs.
+        route_data (RouteCreate): The route data containing chat_id and target_urls.
 
     Returns:
         dict: A message indicating the route was added.
@@ -164,9 +167,9 @@ def add_route(chat_id: str, target_urls: list[str]):
     global config
     config = load_config(CONFIG_PATH)
     
-    if chat_id in config["routes"]:
+    if route_data.chat_id in config["routes"]:
         raise HTTPException(status_code=400, detail="Route already exists")
-    config["routes"][chat_id] = target_urls
+    config["routes"][route_data.chat_id] = route_data.target_urls
 
     # Save updated config to file
     with open(CONFIG_PATH, "w") as f:
@@ -264,8 +267,9 @@ def delete_route_url(chat_id: str, url: str):
 def get_execution_logs():
     """
     Retrieves the execution counts for all webhooks.
+    This endpoint is kept for compatibility but returns empty data.
 
     Returns:
-        list[dict]: A list of execution counts for each webhook.
+        list[dict]: An empty list since we're not tracking executions.
     """
     return []
