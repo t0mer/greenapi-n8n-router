@@ -2,11 +2,15 @@ class RoutesManager {
     constructor() {
         this.routes = [];
         this.modal = null;
+        this.loggerSocket = null;
+        this.isDragging = false;
+        this.dragOffset = { x: 0, y: 0 };
         this.init();
     }
 
     init() {
         this.setupEventListeners();
+        this.setupLogger();
         this.loadRoutes();
     }
 
@@ -1167,6 +1171,163 @@ class RoutesManager {
 
     // Remove auto-refresh to avoid unnecessary API calls
     // startAutoRefresh() method removed
+
+    setupLogger() {
+        // Setup logger UI
+        const toggleBtn = document.getElementById('toggleLoggerBtn');
+        const loggerWindow = document.getElementById('loggerWindow');
+        const closeBtn = document.getElementById('closeLoggerBtn');
+        const clearBtn = document.getElementById('clearLogsBtn');
+
+        toggleBtn.addEventListener('click', () => {
+            if (loggerWindow.classList.contains('hidden')) {
+                loggerWindow.classList.remove('hidden');
+                toggleBtn.textContent = 'Hide Logger';
+                this.connectWebSocket();
+            } else {
+                loggerWindow.classList.add('hidden');
+                toggleBtn.textContent = 'Show Logger';
+                this.disconnectWebSocket();
+            }
+        });
+
+        closeBtn.addEventListener('click', () => {
+            loggerWindow.classList.add('hidden');
+            toggleBtn.textContent = 'Show Logger';
+            this.disconnectWebSocket();
+        });
+
+        clearBtn.addEventListener('click', () => {
+            const loggerContent = document.getElementById('loggerContent');
+            loggerContent.innerHTML = '';
+        });
+
+        // Setup dragging functionality
+        this.setupLoggerDragging();
+    }
+
+    setupLoggerDragging() {
+        const loggerWindow = document.getElementById('loggerWindow');
+        const loggerHeader = document.querySelector('.logger-header');
+
+        loggerHeader.addEventListener('mousedown', (e) => {
+            // Don't start dragging if clicking on buttons
+            if (e.target.closest('.logger-controls')) return;
+
+            this.isDragging = true;
+            const rect = loggerWindow.getBoundingClientRect();
+            this.dragOffset.x = e.clientX - rect.left;
+            this.dragOffset.y = e.clientY - rect.top;
+
+            loggerHeader.style.cursor = 'grabbing';
+            loggerWindow.style.transition = 'none';
+            
+            // Prevent text selection while dragging
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!this.isDragging) return;
+
+            e.preventDefault();
+            
+            const newX = e.clientX - this.dragOffset.x;
+            const newY = e.clientY - this.dragOffset.y;
+
+            // Get window dimensions and logger dimensions
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            const loggerRect = loggerWindow.getBoundingClientRect();
+
+            // Calculate boundaries (keep at least 50px visible on each side)
+            const minX = -loggerRect.width + 50;
+            const maxX = windowWidth - 50;
+            const minY = 0;
+            const maxY = windowHeight - 50;
+
+            // Constrain position within boundaries
+            const constrainedX = Math.max(minX, Math.min(maxX, newX));
+            const constrainedY = Math.max(minY, Math.min(maxY, newY));
+
+            loggerWindow.style.left = `${constrainedX}px`;
+            loggerWindow.style.top = `${constrainedY}px`;
+            loggerWindow.style.right = 'auto';
+            loggerWindow.style.bottom = 'auto';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (this.isDragging) {
+                this.isDragging = false;
+                loggerHeader.style.cursor = 'grab';
+                loggerWindow.style.transition = 'all 0.3s ease';
+                document.body.style.userSelect = '';
+            }
+        });
+
+        // Set initial cursor style
+        loggerHeader.style.cursor = 'grab';
+    }
+
+    connectWebSocket() {
+        if (this.loggerSocket) return;
+
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/logs`;
+        
+        this.loggerSocket = new WebSocket(wsUrl);
+
+        this.loggerSocket.onopen = () => {
+            this.addLogEntry('WebSocket connected', 'success');
+        };
+
+        this.loggerSocket.onmessage = (event) => {
+            const logData = JSON.parse(event.data);
+            this.addLogEntry(logData.message, logData.level, logData.timestamp);
+        };
+
+        this.loggerSocket.onclose = () => {
+            this.addLogEntry('WebSocket disconnected', 'warning');
+            this.loggerSocket = null;
+        };
+
+        this.loggerSocket.onerror = (error) => {
+            this.addLogEntry('WebSocket error: ' + error, 'error');
+        };
+    }
+
+    disconnectWebSocket() {
+        if (this.loggerSocket) {
+            this.loggerSocket.close();
+            this.loggerSocket = null;
+        }
+    }
+
+    addLogEntry(message, level = 'info', timestamp = null) {
+        const loggerContent = document.getElementById('loggerContent');
+        const logEntry = document.createElement('div');
+        logEntry.className = `log-entry ${level}`;
+
+        const time = timestamp ? new Date(timestamp) : new Date();
+        const timeStr = time.toLocaleTimeString('en-US', { 
+            hour12: false, 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit' 
+        });
+
+        logEntry.innerHTML = `
+            <span class="log-timestamp">[${timeStr}]</span>
+            <span class="log-message">${message}</span>
+        `;
+
+        loggerContent.appendChild(logEntry);
+        loggerContent.scrollTop = loggerContent.scrollHeight;
+
+        // Limit to last 100 log entries
+        while (loggerContent.children.length > 100) {
+            loggerContent.removeChild(loggerContent.firstChild);
+        }
+    }
 }
 
 // Initialize immediately when DOM is loaded

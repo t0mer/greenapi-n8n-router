@@ -1,7 +1,6 @@
 from whatsapp_chatbot_python import GreenAPIBot, Notification
 from config_loader import load_config, ensure_config
 from config_watcher import start_config_watcher
-from logger import update_execution_count, get_execution_counts
 from loguru import logger
 import httpx, asyncio
 from threading import Thread
@@ -10,9 +9,77 @@ import uvicorn
 from typing import Dict, List
 import sys  # For exiting the application on critical errors
 import time  # For keeping the main thread alive
-from shared_resources import sqlite_handler  # Import sqlite_handler from shared_resources
+from fastapi import WebSocket, WebSocketDisconnect
+import json
+from datetime import datetime
+import concurrent.futures
+# from shared_resources import sqlite_handler  # Import sqlite_handler from shared_resources
 
 CONFIG_PATH = "config/config.yaml"
+
+# WebSocket connections manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+        self.loop = None
+
+    def set_loop(self, loop):
+        self.loop = loop
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast_log(self, message: str, level: str = "info"):
+        log_data = {
+            "timestamp": datetime.now().isoformat(),
+            "level": level,
+            "message": message
+        }
+        if self.active_connections:
+            disconnected = []
+            for connection in self.active_connections:
+                try:
+                    await connection.send_text(json.dumps(log_data))
+                except:
+                    disconnected.append(connection)
+            
+            # Remove disconnected clients
+            for conn in disconnected:
+                self.active_connections.remove(conn)
+
+    def safe_broadcast_log(self, message: str, level: str = "info"):
+        """Thread-safe method to broadcast logs"""
+        if self.loop and not self.loop.is_closed():
+            try:
+                if self.active_connections:  # Only schedule if there are connections
+                    asyncio.run_coroutine_threadsafe(
+                        self.broadcast_log(message, level), 
+                        self.loop
+                    )
+            except Exception as e:
+                # Silently ignore WebSocket broadcast errors
+                pass
+
+manager = ConnectionManager()
+
+# Add WebSocket endpoint to FastAPI app
+@app.websocket("/ws/logs")
+async def websocket_logs(websocket: WebSocket):
+    # Set the event loop for the manager when first WebSocket connects
+    if manager.loop is None:
+        manager.loop = asyncio.get_event_loop()
+    
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()  # Keep connection alive
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 ensure_config(CONFIG_PATH)  # 🛡️ Ensure file exists
 
@@ -27,7 +94,9 @@ def reload_config(new_config: Dict[str, Dict[str, List[str]]]) -> None:
     """
     global config
     config = new_config
-    logger.info("🔁 Config reloaded")
+    log_message = "🔁 Config reloaded"
+    logger.info(log_message)
+    manager.safe_broadcast_log(log_message, "info")
 
 start_config_watcher(CONFIG_PATH, reload_config)
 
@@ -37,8 +106,13 @@ try:
         config["green_api"]["instance_id"],
         config["green_api"]["token"]
     )
+    log_message = f"🟢 Bot initialized successfully with instance {config['green_api']['instance_id']}"
+    logger.info(log_message)
+    manager.safe_broadcast_log(log_message, "success")
 except Exception as e:
-    logger.critical(f"❌ Failed to initialize GreenAPIBot: {e}")
+    log_message = f"❌ Failed to initialize GreenAPIBot: {e}"
+    logger.critical(log_message)
+    manager.safe_broadcast_log(log_message, "error")
     sys.exit(1)  # Exit the application if bot initialization fails
 
 @bot.router.message()
@@ -54,10 +128,14 @@ def route_handler(notification: Notification) -> None:
     target_urls = routes.get(chat_id)
 
     if not target_urls:
-        logger.warning(f"🚫 No routes for chatId: {chat_id}")
+        log_message = f"🚫 No routes for chatId: {chat_id}"
+        logger.warning(log_message)
+        manager.safe_broadcast_log(log_message, "warning")
         return
 
-    logger.info(f"➡️ Forwarding from {chat_id} to {len(target_urls)} webhook(s)")
+    log_message = f"➡️ Forwarding from {chat_id} to {len(target_urls)} webhook(s)"
+    logger.info(log_message)
+    manager.safe_broadcast_log(log_message, "info")
 
     async def forward(url: str):
         """
@@ -76,10 +154,13 @@ def route_handler(notification: Notification) -> None:
                     },
                     timeout=5.0
                 )
-                update_execution_count(chat_id, url)  # Update execution count only for existing routes
-                logger.success(f"✅ Forwarded to {url}")
+                success_message = f"✅ Forwarded to {url}"
+                logger.success(success_message)
+                manager.safe_broadcast_log(success_message, "success")
             except Exception as e:
-                logger.error(f"❌ Error forwarding to {url}: {e}")
+                error_message = f"❌ Error forwarding to {url}: {e}"
+                logger.error(error_message)
+                manager.safe_broadcast_log(error_message, "error")
 
     for url in target_urls:
         asyncio.run(forward(url))
