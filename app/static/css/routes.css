@@ -561,3 +561,51 @@ body {
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+.webhooks-input-list {
+    margin-bottom: 15px;
+}
+
+.webhook-input-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.webhook-url-input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.webhook-url-input:focus {
+    border-color: #2196F3;
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+    outline: none;
+}
+
+.remove-webhook-input {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+    color: #dc3545;
+    min-width: 40px;
+}
+
+.remove-webhook-input:hover {
+    background-color: #ffeaea;
+    transform: scale(1.05);
+}
+
+.add-webhook-input-btn {
+    margin-top: 10px;
+    font-size: 14px;
+    padding: 8px 16px;
+}

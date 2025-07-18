@@ -484,12 +484,17 @@ class RoutesManager {
                     <div class="form-group">
                         <label for="chatId">Chat ID:</label>
                         <input type="text" id="chatId" name="chatId" required 
-                            placeholder="e.g., 972523531857">
+                            placeholder="e.g., 972523531857@c.us">
                     </div>
                     <div class="form-group">
-                        <label for="webhookUrl">Webhook URL:</label>
-                        <input type="url" id="webhookUrl" name="webhookUrl" required
-                            placeholder="https://your-n8n-instance.com/webhook/...">
+                        <label>Webhook URLs:</label>
+                        <div class="webhooks-input-list" id="webhooksInputList">
+                            <div class="webhook-input-item">
+                                <input type="url" class="webhook-url-input" placeholder="https://your-n8n-instance.com/webhook/..." required>
+                                <button type="button" class="remove-webhook-input" title="Remove webhook">🗑️</button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-secondary add-webhook-input-btn">Add Another Webhook</button>
                     </div>
                     <button type="submit" class="btn btn-primary">Create Route</button>
                     <button type="button" class="btn btn-secondary" onclick="routesManager.hideModal()">Cancel</button>
@@ -497,13 +502,89 @@ class RoutesManager {
             </div>
         `;
         document.body.appendChild(this.modal);
+        this.setupCreateModalListeners();
+    }
+
+    setupCreateModalListeners() {
+        const modal = this.modal;
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target.closest('.add-webhook-input-btn')) {
+                this.addWebhookInput();
+            }
+            
+            if (e.target.closest('.remove-webhook-input')) {
+                this.removeWebhookInput(e.target.closest('.webhook-input-item'));
+            }
+        });
+    }
+
+    addWebhookInput() {
+        const webhooksList = this.modal.querySelector('#webhooksInputList');
+        const newWebhookInput = document.createElement('div');
+        newWebhookInput.className = 'webhook-input-item';
+        newWebhookInput.innerHTML = `
+            <input type="url" class="webhook-url-input" placeholder="https://your-n8n-instance.com/webhook/..." required>
+            <button type="button" class="remove-webhook-input" title="Remove webhook">🗑️</button>
+        `;
+        webhooksList.appendChild(newWebhookInput);
+        
+        // Focus on the new input
+        newWebhookInput.querySelector('.webhook-url-input').focus();
+    }
+
+    removeWebhookInput(webhookInputItem) {
+        const webhooksList = this.modal.querySelector('#webhooksInputList');
+        
+        // Don't allow removing the last webhook input
+        if (webhooksList.children.length <= 1) {
+            Swal.fire({
+                title: 'Cannot Remove!',
+                text: 'A route must have at least one webhook URL.',
+                icon: 'warning',
+                confirmButtonColor: '#2196F3'
+            });
+            return;
+        }
+        
+        webhookInputItem.remove();
     }
 
     async handleFormSubmit(form) {
         const formData = new FormData(form);
+        const chatId = formData.get('chatId');
+        
+        // Collect all webhook URLs
+        const webhookInputs = form.querySelectorAll('.webhook-url-input');
+        const webhookUrls = Array.from(webhookInputs)
+            .map(input => input.value.trim())
+            .filter(url => url !== ''); // Remove empty URLs
+
+        if (webhookUrls.length === 0) {
+            Swal.fire({
+                title: 'Error!',
+                text: 'Please enter at least one webhook URL.',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+            return;
+        }
+
+        // Check for duplicate URLs within the same route
+        const uniqueUrls = [...new Set(webhookUrls)];
+        if (uniqueUrls.length !== webhookUrls.length) {
+            Swal.fire({
+                title: 'Duplicate URLs!',
+                text: 'Please remove duplicate webhook URLs.',
+                icon: 'warning',
+                confirmButtonColor: '#2196F3'
+            });
+            return;
+        }
+
         const newRoute = {
-            chat_id: formData.get('chatId'),
-            target_urls: [formData.get('webhookUrl')] // Send as array to match API
+            chat_id: chatId,
+            target_urls: webhookUrls
         };
 
         if (this.routes.find(route => route.id === newRoute.chat_id)) {
@@ -531,7 +612,23 @@ class RoutesManager {
                 await this.loadRoutes();
                 this.hideModal();
                 form.reset();
-                this.showNotification('Route created successfully!', 'success');
+                
+                // Reset to single webhook input
+                const webhooksList = form.querySelector('#webhooksInputList');
+                webhooksList.innerHTML = `
+                    <div class="webhook-input-item">
+                        <input type="url" class="webhook-url-input" placeholder="https://your-n8n-instance.com/webhook/..." required>
+                        <button type="button" class="remove-webhook-input" title="Remove webhook">🗑️</button>
+                    </div>
+                `;
+                
+                Swal.fire({
+                    title: 'Success!',
+                    text: `Route created successfully with ${webhookUrls.length} webhook${webhookUrls.length > 1 ? 's' : ''}!`,
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
             } else {
                 const error = await response.text();
                 Swal.fire({
