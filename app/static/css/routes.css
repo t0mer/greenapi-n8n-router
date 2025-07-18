@@ -374,3 +374,95 @@ body {
     background-color: #ffeaea;
     transform: scale(1.1);
 }
+
+.webhooks-list {
+    margin: 10px 0;
+}
+
+.webhook-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.webhook-item:last-child {
+    border-bottom: none;
+}
+
+.webhook-url {
+    flex: 1;
+    color: #2196F3;
+    text-decoration: none;
+    word-break: break-all;
+    margin-right: 10px;
+}
+
+.webhook-edit-input {
+    flex: 1;
+    padding: 5px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    margin-right: 10px;
+}
+
+.webhook-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.edit-webhook-btn {
+    background: none;
+    border: none;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+    color: #666;
+}
+
+.edit-webhook-btn:hover {
+    background-color: #f0f0f0;
+}
+
+.webhook-edit-controls {
+    display: none;
+    gap: 5px;
+    align-items: center;
+}
+
+.save-webhook-btn,
+.cancel-webhook-btn {
+    background: none;
+    border: none;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+.save-webhook-btn {
+    color: #28a745;
+}
+
+.save-webhook-btn:hover {
+    background-color: #e8f5e8;
+}
+
+.cancel-webhook-btn {
+    color: #dc3545;
+}
+
+.cancel-webhook-btn:hover {
+    background-color: #ffeaea;
+}
+
+.save-webhook-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}

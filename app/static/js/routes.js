@@ -107,15 +107,9 @@ class RoutesManager {
                 this.showModal();
             }
             
-            if (e.target.closest('.chat-card') && !e.target.closest('.edit-icon') && !e.target.closest('.edit-controls') && !e.target.closest('.delete-btn')) {
+            if (e.target.closest('.chat-card') && !e.target.closest('.edit-controls') && !e.target.closest('.delete-btn')) {
                 const chatId = e.target.closest('.chat-card').dataset.chatId;
                 this.openRouteDetails(chatId);
-            }
-            
-            if (e.target.closest('.edit-icon')) {
-                e.stopPropagation();
-                const chatId = e.target.closest('.chat-card').dataset.chatId;
-                this.enableEditMode(chatId);
             }
             
             if (e.target.closest('.save-edit')) {
@@ -206,9 +200,6 @@ class RoutesManager {
         card.innerHTML = `
             <div class="card-header">
                 <h3 class="chat-id">${route.id}</h3>
-                <div class="edit-icon" title="Edit webhook URL">
-                    ✏️
-                </div>
             </div>
             <div class="card-content">
                 <p><strong>🔗 Webhook:</strong> 
@@ -248,13 +239,11 @@ class RoutesManager {
         const webhookDisplay = card.querySelector('.webhook-display');
         const webhookEdit = card.querySelector('.webhook-edit');
         const editControls = card.querySelector('.edit-controls');
-        const editIcon = card.querySelector('.edit-icon');
 
         // Hide display elements and show edit elements
         webhookDisplay.style.display = 'none';
         webhookEdit.style.display = 'inline-block';
         editControls.style.display = 'flex';
-        editIcon.style.display = 'none';
 
         // Focus on the input
         webhookEdit.focus();
@@ -272,7 +261,6 @@ class RoutesManager {
         const webhookDisplay = card.querySelector('.webhook-display');
         const webhookEdit = card.querySelector('.webhook-edit');
         const editControls = card.querySelector('.edit-controls');
-        const editIcon = card.querySelector('.edit-icon');
 
         // Reset input to original value
         webhookEdit.value = route.webhookUrl || '';
@@ -281,7 +269,6 @@ class RoutesManager {
         webhookDisplay.style.display = 'inline';
         webhookEdit.style.display = 'none';
         editControls.style.display = 'none';
-        editIcon.style.display = 'block';
 
         // Re-enable card dragging
         card.draggable = true;
@@ -562,9 +549,19 @@ class RoutesManager {
         modal.className = 'modal';
         modal.style.display = 'block';
         
-        const webhooksList = route.webhookUrls.map(url => 
-            `<a href="${url}" target="_blank">${url}</a>`
-        ).join('<br>');
+        const webhooksList = route.webhookUrls.map((url, index) => 
+            `<div class="webhook-item" data-index="${index}">
+                <span class="webhook-url" title="${url}">${url}</span>
+                <input type="url" class="webhook-edit-input" value="${url}" style="display: none;">
+                <div class="webhook-actions">
+                    <button class="edit-webhook-btn" title="Edit webhook">✏️</button>
+                    <div class="webhook-edit-controls" style="display: none;">
+                        <button class="save-webhook-btn" title="Save changes">✅</button>
+                        <button class="cancel-webhook-btn" title="Cancel">❌</button>
+                    </div>
+                </div>
+            </div>`
+        ).join('');
         
         modal.innerHTML = `
             <div class="modal-content">
@@ -572,7 +569,10 @@ class RoutesManager {
                 <h2>Route Details</h2>
                 <div class="route-details">
                     <p><strong>Chat ID:</strong> ${route.id}</p>
-                    <p><strong>Webhook URL(s):</strong><br>${webhooksList}</p>
+                    <p><strong>Webhook URL(s):</strong></p>
+                    <div class="webhooks-list">
+                        ${webhooksList}
+                    </div>
                     <p><strong>Total Webhooks:</strong> ${route.webhookUrls.length}</p>
                 </div>
                 <div style="margin-top: 20px;">
@@ -583,12 +583,151 @@ class RoutesManager {
         
         document.body.appendChild(modal);
         
+        // Add event listeners for webhook editing
+        this.setupWebhookEditListeners(modal, route);
+        
         // Close modal when clicking outside
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 modal.remove();
             }
         });
+    }
+
+    setupWebhookEditListeners(modal, route) {
+        modal.addEventListener('click', (e) => {
+            if (e.target.closest('.edit-webhook-btn')) {
+                const webhookItem = e.target.closest('.webhook-item');
+                this.enableWebhookEdit(webhookItem);
+            }
+            
+            if (e.target.closest('.save-webhook-btn')) {
+                const webhookItem = e.target.closest('.webhook-item');
+                this.saveWebhookEdit(webhookItem, route, modal);
+            }
+            
+            if (e.target.closest('.cancel-webhook-btn')) {
+                const webhookItem = e.target.closest('.webhook-item');
+                this.cancelWebhookEdit(webhookItem);
+            }
+        });
+    }
+
+    enableWebhookEdit(webhookItem) {
+        const urlSpan = webhookItem.querySelector('.webhook-url');
+        const editInput = webhookItem.querySelector('.webhook-edit-input');
+        const editBtn = webhookItem.querySelector('.edit-webhook-btn');
+        const editControls = webhookItem.querySelector('.webhook-edit-controls');
+
+        urlSpan.style.display = 'none';
+        editInput.style.display = 'inline-block';
+        editBtn.style.display = 'none';
+        editControls.style.display = 'flex';
+
+        editInput.focus();
+        editInput.select();
+    }
+
+    cancelWebhookEdit(webhookItem) {
+        const urlSpan = webhookItem.querySelector('.webhook-url');
+        const editInput = webhookItem.querySelector('.webhook-edit-input');
+        const editBtn = webhookItem.querySelector('.edit-webhook-btn');
+        const editControls = webhookItem.querySelector('.webhook-edit-controls');
+
+        // Reset input to original value
+        editInput.value = urlSpan.textContent;
+
+        urlSpan.style.display = 'inline';
+        editInput.style.display = 'none';
+        editBtn.style.display = 'inline-block';
+        editControls.style.display = 'none';
+    }
+
+    async saveWebhookEdit(webhookItem, route, modal) {
+        const urlSpan = webhookItem.querySelector('.webhook-url');
+        const editInput = webhookItem.querySelector('.webhook-edit-input');
+        const newUrl = editInput.value.trim();
+        const webhookIndex = parseInt(webhookItem.dataset.index);
+
+        if (!newUrl) {
+            Swal.fire({
+                title: 'Error!',
+                text: 'Webhook URL cannot be empty',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+            return;
+        }
+
+        try {
+            // Show loading on save button
+            const saveBtn = webhookItem.querySelector('.save-webhook-btn');
+            saveBtn.textContent = '⏳';
+            saveBtn.disabled = true;
+
+            // Update the webhooks array
+            const updatedUrls = [...route.webhookUrls];
+            updatedUrls[webhookIndex] = newUrl;
+
+            const response = await fetch(`/routes/${route.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    chat_id: route.id,
+                    target_urls: updatedUrls
+                })
+            });
+
+            if (response.ok) {
+                // Update the route in memory
+                route.webhookUrls[webhookIndex] = newUrl;
+                if (webhookIndex === 0) {
+                    route.webhookUrl = newUrl; // Update primary URL if it's the first one
+                }
+
+                // Update the display
+                urlSpan.textContent = newUrl;
+                urlSpan.title = newUrl;
+                
+                this.cancelWebhookEdit(webhookItem);
+                
+                Swal.fire({
+                    title: 'Updated!',
+                    text: 'Webhook URL updated successfully!',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+
+                // Update the main card if this was the primary URL
+                if (webhookIndex === 0) {
+                    this.updateCardDisplay(route.id, newUrl);
+                }
+            } else {
+                const error = await response.text();
+                Swal.fire({
+                    title: 'Error!',
+                    text: `Failed to update webhook URL: ${error}`,
+                    icon: 'error',
+                    confirmButtonColor: '#dc3545'
+                });
+                saveBtn.textContent = '✅';
+                saveBtn.disabled = false;
+            }
+        } catch (error) {
+            console.error('Error updating webhook URL:', error);
+            Swal.fire({
+                title: 'Error!',
+                text: 'Failed to update webhook URL. Server may be unavailable.',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+            const saveBtn = webhookItem.querySelector('.save-webhook-btn');
+            saveBtn.textContent = '✅';
+            saveBtn.disabled = false;
+        }
     }
 
     showNotification(message, type = 'info') {
