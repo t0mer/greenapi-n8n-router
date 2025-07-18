@@ -555,6 +555,7 @@ class RoutesManager {
                 <input type="url" class="webhook-edit-input" value="${url}" style="display: none;">
                 <div class="webhook-actions">
                     <button class="edit-webhook-btn" title="Edit webhook">✏️</button>
+                    <button class="delete-webhook-btn" title="Delete webhook">🗑️</button>
                     <div class="webhook-edit-controls" style="display: none;">
                         <button class="save-webhook-btn" title="Save changes">✅</button>
                         <button class="cancel-webhook-btn" title="Cancel">❌</button>
@@ -572,10 +573,20 @@ class RoutesManager {
                     <p><strong>Webhook URL(s):</strong></p>
                     <div class="webhooks-list">
                         ${webhooksList}
+                        <div class="add-webhook-container" style="display: none;">
+                            <div class="webhook-item add-webhook-item">
+                                <input type="url" class="add-webhook-input" placeholder="Enter new webhook URL..." style="flex: 1; margin-right: 10px;">
+                                <div class="webhook-actions">
+                                    <button class="confirm-add-webhook-btn" title="Add webhook">✅</button>
+                                    <button class="cancel-add-webhook-btn" title="Cancel">❌</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <p><strong>Total Webhooks:</strong> ${route.webhookUrls.length}</p>
                 </div>
                 <div style="margin-top: 20px;">
+                    <button class="btn btn-primary add-webhook-trigger-btn">Add Webhook</button>
                     <button class="btn btn-secondary" onclick="this.closest('.modal').remove()">Close</button>
                 </div>
             </div>
@@ -583,7 +594,7 @@ class RoutesManager {
         
         document.body.appendChild(modal);
         
-        // Add event listeners for webhook editing
+        // Add event listeners for webhook editing, deleting, and adding
         this.setupWebhookEditListeners(modal, route);
         
         // Close modal when clicking outside
@@ -610,44 +621,52 @@ class RoutesManager {
                 const webhookItem = e.target.closest('.webhook-item');
                 this.cancelWebhookEdit(webhookItem);
             }
+            
+            if (e.target.closest('.delete-webhook-btn')) {
+                const webhookItem = e.target.closest('.webhook-item');
+                this.confirmDeleteWebhook(webhookItem, route, modal);
+            }
+            
+            if (e.target.closest('.add-webhook-trigger-btn')) {
+                this.showAddWebhookInput(modal);
+            }
+            
+            if (e.target.closest('.confirm-add-webhook-btn')) {
+                this.confirmAddWebhook(modal, route);
+            }
+            
+            if (e.target.closest('.cancel-add-webhook-btn')) {
+                this.cancelAddWebhook(modal);
+            }
         });
     }
 
-    enableWebhookEdit(webhookItem) {
-        const urlSpan = webhookItem.querySelector('.webhook-url');
-        const editInput = webhookItem.querySelector('.webhook-edit-input');
-        const editBtn = webhookItem.querySelector('.edit-webhook-btn');
-        const editControls = webhookItem.querySelector('.webhook-edit-controls');
+    showAddWebhookInput(modal) {
+        const addContainer = modal.querySelector('.add-webhook-container');
+        const addTriggerBtn = modal.querySelector('.add-webhook-trigger-btn');
+        const addInput = modal.querySelector('.add-webhook-input');
 
-        urlSpan.style.display = 'none';
-        editInput.style.display = 'inline-block';
-        editBtn.style.display = 'none';
-        editControls.style.display = 'flex';
+        addContainer.style.display = 'block';
+        addTriggerBtn.disabled = true;
+        addTriggerBtn.textContent = 'Adding...';
 
-        editInput.focus();
-        editInput.select();
+        addInput.focus();
     }
 
-    cancelWebhookEdit(webhookItem) {
-        const urlSpan = webhookItem.querySelector('.webhook-url');
-        const editInput = webhookItem.querySelector('.webhook-edit-input');
-        const editBtn = webhookItem.querySelector('.edit-webhook-btn');
-        const editControls = webhookItem.querySelector('.webhook-edit-controls');
+    cancelAddWebhook(modal) {
+        const addContainer = modal.querySelector('.add-webhook-container');
+        const addTriggerBtn = modal.querySelector('.add-webhook-trigger-btn');
+        const addInput = modal.querySelector('.add-webhook-input');
 
-        // Reset input to original value
-        editInput.value = urlSpan.textContent;
-
-        urlSpan.style.display = 'inline';
-        editInput.style.display = 'none';
-        editBtn.style.display = 'inline-block';
-        editControls.style.display = 'none';
+        addContainer.style.display = 'none';
+        addTriggerBtn.disabled = false;
+        addTriggerBtn.textContent = 'Add Webhook';
+        addInput.value = '';
     }
 
-    async saveWebhookEdit(webhookItem, route, modal) {
-        const urlSpan = webhookItem.querySelector('.webhook-url');
-        const editInput = webhookItem.querySelector('.webhook-edit-input');
-        const newUrl = editInput.value.trim();
-        const webhookIndex = parseInt(webhookItem.dataset.index);
+    async confirmAddWebhook(modal, route) {
+        const addInput = modal.querySelector('.add-webhook-input');
+        const newUrl = addInput.value.trim();
 
         if (!newUrl) {
             Swal.fire({
@@ -659,15 +678,25 @@ class RoutesManager {
             return;
         }
 
+        // Check for duplicate URLs
+        if (route.webhookUrls.includes(newUrl)) {
+            Swal.fire({
+                title: 'Error!',
+                text: 'This webhook URL already exists for this route',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+            return;
+        }
+
         try {
-            // Show loading on save button
-            const saveBtn = webhookItem.querySelector('.save-webhook-btn');
-            saveBtn.textContent = '⏳';
-            saveBtn.disabled = true;
+            // Show loading on confirm button
+            const confirmBtn = modal.querySelector('.confirm-add-webhook-btn');
+            confirmBtn.textContent = '⏳';
+            confirmBtn.disabled = true;
 
             // Update the webhooks array
-            const updatedUrls = [...route.webhookUrls];
-            updatedUrls[webhookIndex] = newUrl;
+            const updatedUrls = [...route.webhookUrls, newUrl];
 
             const response = await fetch(`/routes/${route.id}`, {
                 method: 'PUT',
@@ -682,51 +711,196 @@ class RoutesManager {
 
             if (response.ok) {
                 // Update the route in memory
-                route.webhookUrls[webhookIndex] = newUrl;
-                if (webhookIndex === 0) {
-                    route.webhookUrl = newUrl; // Update primary URL if it's the first one
+                route.webhookUrls = updatedUrls;
+
+                // Create new webhook item HTML
+                const newWebhookHtml = `
+                    <div class="webhook-item" data-index="${updatedUrls.length - 1}">
+                        <span class="webhook-url" title="${newUrl}">${newUrl}</span>
+                        <input type="url" class="webhook-edit-input" value="${newUrl}" style="display: none;">
+                        <div class="webhook-actions">
+                            <button class="edit-webhook-btn" title="Edit webhook">✏️</button>
+                            <button class="delete-webhook-btn" title="Delete webhook">🗑️</button>
+                            <div class="webhook-edit-controls" style="display: none;">
+                                <button class="save-webhook-btn" title="Save changes">✅</button>
+                                <button class="cancel-webhook-btn" title="Cancel">❌</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Insert the new webhook item before the add container
+                const addContainer = modal.querySelector('.add-webhook-container');
+                addContainer.insertAdjacentHTML('beforebegin', newWebhookHtml);
+
+                // Update the webhook count display
+                const totalWebhooksElement = modal.querySelector('.route-details p:last-child');
+                if (totalWebhooksElement) {
+                    totalWebhooksElement.innerHTML = `<strong>Total Webhooks:</strong> ${updatedUrls.length}`;
                 }
 
-                // Update the display
-                urlSpan.textContent = newUrl;
-                urlSpan.title = newUrl;
-                
-                this.cancelWebhookEdit(webhookItem);
-                
+                // Update the card webhook count
+                const cardWebhookCount = document.querySelector(`[data-chat-id="${route.id}"] .webhook-count`);
+                if (cardWebhookCount) {
+                    cardWebhookCount.innerHTML = `📋 ${updatedUrls.length} webhook${updatedUrls.length > 1 ? 's' : ''}`;
+                }
+
+                // Cancel add mode
+                this.cancelAddWebhook(modal);
+
+                // Show success message
                 Swal.fire({
-                    title: 'Updated!',
-                    text: 'Webhook URL updated successfully!',
+                    title: 'Added!',
+                    text: 'Webhook URL added successfully!',
                     icon: 'success',
                     timer: 2000,
                     showConfirmButton: false
                 });
-
-                // Update the main card if this was the primary URL
-                if (webhookIndex === 0) {
-                    this.updateCardDisplay(route.id, newUrl);
-                }
             } else {
                 const error = await response.text();
                 Swal.fire({
                     title: 'Error!',
-                    text: `Failed to update webhook URL: ${error}`,
+                    text: `Failed to add webhook URL: ${error}`,
                     icon: 'error',
                     confirmButtonColor: '#dc3545'
                 });
-                saveBtn.textContent = '✅';
-                saveBtn.disabled = false;
+                confirmBtn.textContent = '✅';
+                confirmBtn.disabled = false;
             }
         } catch (error) {
-            console.error('Error updating webhook URL:', error);
+            console.error('Error adding webhook:', error);
             Swal.fire({
                 title: 'Error!',
-                text: 'Failed to update webhook URL. Server may be unavailable.',
+                text: 'Failed to add webhook URL. Server may be unavailable.',
                 icon: 'error',
                 confirmButtonColor: '#dc3545'
             });
-            const saveBtn = webhookItem.querySelector('.save-webhook-btn');
-            saveBtn.textContent = '✅';
-            saveBtn.disabled = false;
+            const confirmBtn = modal.querySelector('.confirm-add-webhook-btn');
+            confirmBtn.textContent = '✅';
+            confirmBtn.disabled = false;
+        }
+    }
+
+    async confirmDeleteWebhook(webhookItem, route, modal) {
+        const webhookIndex = parseInt(webhookItem.dataset.index);
+        const webhookUrl = route.webhookUrls[webhookIndex];
+
+        // Check if this is the only webhook
+        if (route.webhookUrls.length === 1) {
+            Swal.fire({
+                title: 'Cannot Delete!',
+                text: 'Cannot delete the last webhook URL. A route must have at least one webhook.',
+                icon: 'warning',
+                confirmButtonColor: '#2196F3'
+            });
+            return;
+        }
+
+        const result = await Swal.fire({
+            title: 'Delete Webhook?',
+            html: `
+                <p>Are you sure you want to delete this webhook URL?</p>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: left;">
+                    <strong>Chat ID:</strong> ${route.id}<br>
+                    <strong>Webhook URL:</strong><br>
+                    <code style="word-break: break-all;">${webhookUrl}</code>
+                </div>
+                <p style="color: #dc3545; font-weight: bold;">This action cannot be undone!</p>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, delete it!',
+            cancelButtonText: 'Cancel',
+            focusCancel: true
+        });
+
+        if (result.isConfirmed) {
+            await this.deleteWebhook(webhookItem, route, modal, webhookIndex);
+        }
+    }
+
+    async deleteWebhook(webhookItem, route, modal, webhookIndex) {
+        try {
+            // Show loading toast
+            Swal.fire({
+                title: 'Deleting...',
+                text: 'Please wait while we delete the webhook.',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            // Create updated URLs array without the deleted webhook
+            const updatedUrls = route.webhookUrls.filter((_, index) => index !== webhookIndex);
+
+            const response = await fetch(`/routes/${route.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    chat_id: route.id,
+                    target_urls: updatedUrls
+                })
+            });
+
+            if (response.ok) {
+                // Update the route in memory
+                route.webhookUrls = updatedUrls;
+                if (webhookIndex === 0 && updatedUrls.length > 0) {
+                    route.webhookUrl = updatedUrls[0]; // Update primary URL if we deleted the first one
+                }
+
+                // Remove the webhook item from the DOM
+                webhookItem.remove();
+
+                // Update the webhook count display
+                const totalWebhooksElement = modal.querySelector('.route-details p:last-child');
+                if (totalWebhooksElement) {
+                    totalWebhooksElement.innerHTML = `<strong>Total Webhooks:</strong> ${updatedUrls.length}`;
+                }
+
+                // Update the main card if this was the primary URL
+                if (webhookIndex === 0 && updatedUrls.length > 0) {
+                    this.updateCardDisplay(route.id, updatedUrls[0]);
+                }
+
+                // Update the card webhook count
+                const cardWebhookCount = document.querySelector(`[data-chat-id="${route.id}"] .webhook-count`);
+                if (cardWebhookCount) {
+                    cardWebhookCount.innerHTML = `📋 ${updatedUrls.length} webhook${updatedUrls.length > 1 ? 's' : ''}`;
+                }
+
+                // Show success message
+                Swal.fire({
+                    title: 'Deleted!',
+                    text: 'The webhook URL has been successfully deleted.',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                const error = await response.text();
+                Swal.fire({
+                    title: 'Error!',
+                    text: `Failed to delete webhook URL: ${error}`,
+                    icon: 'error',
+                    confirmButtonColor: '#dc3545'
+                });
+            }
+        } catch (error) {
+            console.error('Error deleting webhook:', error);
+            Swal.fire({
+                title: 'Error!',
+                text: 'Failed to delete webhook URL. Server may be unavailable.',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
         }
     }
 

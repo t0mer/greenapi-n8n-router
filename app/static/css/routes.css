@@ -411,6 +411,40 @@ body {
 .webhook-actions {
     display: flex;
     align-items: center;
+    gap: 8px;
+}
+
+.edit-webhook-btn,
+.delete-webhook-btn {
+    background: none;
+    border: none;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+.edit-webhook-btn {
+    color: #666;
+}
+
+.edit-webhook-btn:hover {
+    background-color: #f0f0f0;
+}
+
+.delete-webhook-btn {
+    color: #dc3545;
+}
+
+.delete-webhook-btn:hover {
+    background-color: #ffeaea;
+    transform: scale(1.05);
+}
+
+.webhook-actions {
+    display: flex;
+    align-items: center;
     gap: 5px;
 }
 
@@ -463,6 +497,67 @@ body {
 }
 
 .save-webhook-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.add-webhook-container {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #ddd;
+}
+
+.add-webhook-item {
+    padding: 8px 0;
+    border-bottom: none !important;
+}
+
+.add-webhook-input {
+    padding: 8px;
+    border: 2px solid #2196F3;
+    border-radius: 4px;
+    font-size: 14px;
+    outline: none;
+}
+
+.add-webhook-input:focus {
+    border-color: #1976D2;
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+.confirm-add-webhook-btn,
+.cancel-add-webhook-btn {
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+.confirm-add-webhook-btn {
+    color: #28a745;
+}
+
+.confirm-add-webhook-btn:hover {
+    background-color: #e8f5e8;
+}
+
+.cancel-add-webhook-btn {
+    color: #dc3545;
+}
+
+.cancel-add-webhook-btn:hover {
+    background-color: #ffeaea;
+}
+
+.confirm-add-webhook-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.add-webhook-trigger-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
 }
