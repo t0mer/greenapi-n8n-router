@@ -3,10 +3,8 @@ green_api:
   token: c6e3da523a62455983c3b999cf5d9b2f0d990b4011f94f908f
 routes:
   0987654321@c.us:
+  - https://n8n.local/webhook/three4
+  0987654322@c.us:
   - https://n8n.local/webhook/three
-  1234567890@c.us:
-  - https://n8n.local/webhook/one
-  - https://n8n.local/webhook/two
-  1234567892@c.us:
-  - https://n8n.local/webhook/one-1
-  - https://n8n.local/webhook/one-2
+  0987654326@c.us:
+  - https://n8n.local/webhook/three

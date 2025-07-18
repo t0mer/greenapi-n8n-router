@@ -10,6 +10,7 @@ import uvicorn
 from typing import Dict, List
 import sys  # For exiting the application on critical errors
 import time  # For keeping the main thread alive
+from shared_resources import sqlite_handler  # Import sqlite_handler from shared_resources
 
 CONFIG_PATH = "config/config.yaml"
 
@@ -18,6 +19,12 @@ ensure_config(CONFIG_PATH)  # 🛡️ Ensure file exists
 config: Dict[str, Dict[str, List[str]]] = load_config(CONFIG_PATH)
 
 def reload_config(new_config: Dict[str, Dict[str, List[str]]]) -> None:
+    """
+    Reloads the configuration and updates the global config variable.
+
+    Args:
+        new_config (Dict[str, Dict[str, List[str]]]): The new configuration to load.
+    """
     global config
     config = new_config
     logger.info("🔁 Config reloaded")
@@ -36,6 +43,12 @@ except Exception as e:
 
 @bot.router.message()
 def route_handler(notification: Notification) -> None:
+    """
+    Handles incoming messages and forwards them to the appropriate webhooks.
+
+    Args:
+        notification (Notification): The incoming message notification.
+    """
     chat_id = notification.event["senderData"]["chatId"]
     routes = config.get("routes", {})
     target_urls = routes.get(chat_id)
@@ -47,6 +60,12 @@ def route_handler(notification: Notification) -> None:
     logger.info(f"➡️ Forwarding from {chat_id} to {len(target_urls)} webhook(s)")
 
     async def forward(url: str):
+        """
+        Sends the notification payload to the specified webhook URL.
+
+        Args:
+            url (str): The webhook URL to forward the payload to.
+        """
         async with httpx.AsyncClient() as client:
             try:
                 await client.post(
@@ -66,6 +85,9 @@ def route_handler(notification: Notification) -> None:
         asyncio.run(forward(url))
 
 def run_web_manager():
+    """
+    Starts the FastAPI web server using Uvicorn.
+    """
     config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
     server = uvicorn.Server(config)
     server.run()  # Start the server properly
