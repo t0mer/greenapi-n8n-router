@@ -5,7 +5,7 @@ import time
 from config_loader import load_config
 
 class ConfigHandler(FileSystemEventHandler):
-    def __init__(self, path, callback):
+    def __init__(self, path: str, callback: callable):
         self.path = path
         self.callback = callback
 
@@ -14,14 +14,14 @@ class ConfigHandler(FileSystemEventHandler):
             config = load_config(self.path)
             self.callback(config)
 
-def start_config_watcher(config_path: str, on_reload):
+def start_config_watcher(config_path: str, on_reload: callable) -> None:
     def run():
         handler = ConfigHandler(config_path, on_reload)
         observer = Observer()
         observer.schedule(handler, path="config", recursive=False)
         observer.start()
         try:
-            while True:
+            while observer.is_alive():
                 time.sleep(1)
         except KeyboardInterrupt:
             observer.stop()
