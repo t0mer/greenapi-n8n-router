@@ -30,7 +30,7 @@ class ConnectionManager:
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
+        if (websocket in self.active_connections):
             self.active_connections.remove(websocket)
 
     async def broadcast_log(self, message: str, level: str = "info"):
@@ -185,32 +185,54 @@ def restart_bot_component():
     # Stop existing bot if running
     if bot:
         try:
-            # The bot library doesn't have a clean stop method, 
-            # so we'll rely on daemon threads being cleaned up
             log_message = "🛑 Stopping existing bot instance..."
             logger.info(log_message)
             manager.safe_broadcast_log(log_message, "info")
+            
+            # Set bot to None to stop processing new messages
             bot = None
             bot_thread = None
+            
+            # Give a moment for any ongoing operations to complete
+            time.sleep(1)
+            
         except Exception as e:
             log_message = f"⚠️ Error stopping bot: {e}"
             logger.warning(log_message)
             manager.safe_broadcast_log(log_message, "warning")
     
+    # Small delay to ensure clean shutdown
+    time.sleep(0.5)
+    
     # Reload configuration
     global config
-    config = load_config(CONFIG_PATH)
+    try:
+        config = load_config(CONFIG_PATH)
+        log_message = "📁 Configuration reloaded"
+        logger.info(log_message)
+        manager.safe_broadcast_log(log_message, "info")
+    except Exception as e:
+        log_message = f"❌ Failed to reload config: {e}"
+        logger.error(log_message)
+        manager.safe_broadcast_log(log_message, "error")
+        return
     
     # Initialize new bot with updated config
-    bot = initialize_bot()
-    bot_thread = start_bot_thread(bot)
-    
-    if bot:
-        log_message = "✅ Bot restarted successfully"
-        logger.info(log_message)
-        manager.safe_broadcast_log(log_message, "success")
-    else:
-        log_message = "❌ Bot restart failed or bot not configured"
+    try:
+        bot = initialize_bot()
+        bot_thread = start_bot_thread(bot)
+        
+        if bot:
+            log_message = "✅ Bot restarted successfully"
+            logger.info(log_message)
+            manager.safe_broadcast_log(log_message, "success")
+        else:
+            log_message = "❌ Bot restart failed or bot not configured"
+            logger.error(log_message)
+            manager.safe_broadcast_log(log_message, "error")
+            
+    except Exception as e:
+        log_message = f"❌ Error during bot restart: {e}"
         logger.error(log_message)
         manager.safe_broadcast_log(log_message, "error")
 
@@ -243,20 +265,53 @@ def reload_config(new_config: Dict[str, Dict[str, List[str]]]) -> None:
 
 start_config_watcher(CONFIG_PATH, reload_config)
 
-# Initialize bot
-bot = initialize_bot()
-bot_thread = start_bot_thread(bot)
-
 def run_web_manager():
     """
     Starts the FastAPI web server using Uvicorn.
     """
-    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
-    server = uvicorn.Server(config)
-    server.run()  # Start the server properly
+    try:
+        config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
+        server = uvicorn.Server(config)
+        server.run()
+    except OSError as e:
+        if "address already in use" in str(e).lower():
+            log_message = "⚠️ Port 8000 already in use - web server may already be running"
+            logger.warning(log_message)
+            manager.safe_broadcast_log(log_message, "warning")
+        else:
+            log_message = f"❌ Failed to start web server: {e}"
+            logger.error(log_message)
+            manager.safe_broadcast_log(log_message, "error")
+    except Exception as e:
+        log_message = f"❌ Unexpected error starting web server: {e}"
+        logger.error(log_message)
+        manager.safe_broadcast_log(log_message, "error")
 
-# Start web server
-Thread(target=run_web_manager, daemon=True).start()
+# Check if we should start the web server (avoid starting if already running)
+def is_port_in_use(port):
+    """Check if a port is already in use."""
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(('0.0.0.0', port))
+            return False
+        except OSError:
+            return True
+
+# Initialize bot
+bot = initialize_bot()
+bot_thread = start_bot_thread(bot)
+
+# Only start web server if port is available
+if not is_port_in_use(8000):
+    Thread(target=run_web_manager, daemon=True).start()
+    log_message = "🌐 Web server starting on port 8000"
+    logger.info(log_message)
+    manager.safe_broadcast_log(log_message, "info")
+else:
+    log_message = "⚠️ Port 8000 already in use - assuming web server is already running"
+    logger.warning(log_message)
+    manager.safe_broadcast_log(log_message, "warning")
 
 # Keep the main thread alive
 try:

@@ -316,11 +316,15 @@ def restart_bot():
     """
     Restarts only the bot component while keeping the web server running.
     """
-    from app import restart_bot_component
-    
     def perform_restart():
         # Give time for the response to be sent
-        threading.Timer(1.0, restart_bot_component).start()
+        time.sleep(1.0)
+        
+        # Import here to avoid circular import
+        import app as main_app
+        main_app.restart_bot_component()
     
-    perform_restart()
+    # Start restart in background thread
+    threading.Timer(0.5, perform_restart).start()
+    
     return {"message": "Bot restart initiated (web server remains running)"}
