@@ -5,8 +5,8 @@ from typing import Dict, List
 
 DEFAULT_CONFIG: Dict[str, Dict[str, List[str]]] = {
     "green_api": {
-        "instance_id": "your-instance-id",
-        "token": "your-token"
+        "instance_id": "",
+        "token": ""
     },
     "routes": {
         "1234567890@c.us": ["https://n8n.local/webhook/one"]

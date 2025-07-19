@@ -14,12 +14,27 @@ body {
     text-align: center;
     color: white;
     margin-bottom: 30px;
+    position: relative;
 }
 
 .header h1 {
     font-size: 2.5rem;
     margin: 0;
     text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.header-controls {
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.header-controls .btn {
+    font-size: 12px;
+    padding: 6px 12px;
 }
 
 .board-container {
@@ -277,6 +292,12 @@ body {
         font-size: 2rem;
     }
     
+    .header-controls {
+        position: relative;
+        justify-content: center;
+        margin-top: 15px;
+    }
+    
     body {
         padding: 10px;
     }
@@ -290,6 +311,15 @@ body {
         flex-direction: column;
         align-items: flex-start;
         gap: 10px;
+    }
+    
+    .logger-window {
+        width: 90%;
+        height: 250px;
+        bottom: 10px;
+        right: 5%;
+        left: 5%;
+        min-width: 280px;
     }
 }
 
@@ -725,9 +755,7 @@ body {
 }
 
 #toggleLoggerBtn {
-    position: absolute;
-    top: 10px;
-    right: 20px;
+    /* Remove position: absolute and other positioning styles */
     font-size: 12px;
     padding: 6px 12px;
 }

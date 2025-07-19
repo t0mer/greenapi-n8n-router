@@ -13,7 +13,6 @@ from fastapi import WebSocket, WebSocketDisconnect
 import json
 from datetime import datetime
 import concurrent.futures
-# from shared_resources import sqlite_handler  # Import sqlite_handler from shared_resources
 
 CONFIG_PATH = "config/config.yaml"
 
@@ -85,85 +84,168 @@ ensure_config(CONFIG_PATH)  # 🛡️ Ensure file exists
 
 config: Dict[str, Dict[str, List[str]]] = load_config(CONFIG_PATH)
 
+# Global bot reference
+bot = None
+bot_thread = None
+
+def initialize_bot():
+    """Initialize the bot with current configuration."""
+    global bot, config
+    
+    # Check if credentials are configured
+    instance_id = config["green_api"].get("instance_id", "").strip()
+    token = config["green_api"].get("token", "").strip()
+
+    if instance_id and token:
+        try:
+            new_bot = GreenAPIBot(instance_id, token)
+            
+            @new_bot.router.message()
+            def route_handler(notification: Notification) -> None:
+                """
+                Handles incoming messages and forwards them to the appropriate webhooks.
+
+                Args:
+                    notification (Notification): The incoming message notification.
+                """
+                chat_id = notification.event["senderData"]["chatId"]
+                routes = config.get("routes", {})
+                target_urls = routes.get(chat_id)
+
+                if not target_urls:
+                    log_message = f"🚫 No routes for chatId: {chat_id}"
+                    logger.warning(log_message)
+                    manager.safe_broadcast_log(log_message, "warning")
+                    return
+
+                log_message = f"➡️ Forwarding from {chat_id} to {len(target_urls)} webhook(s)"
+                logger.info(log_message)
+                manager.safe_broadcast_log(log_message, "info")
+
+                async def forward(url: str):
+                    """
+                    Sends the notification payload to the specified webhook URL.
+
+                    Args:
+                        url (str): The webhook URL to forward the payload to.
+                    """
+                    async with httpx.AsyncClient() as client:
+                        try:
+                            await client.post(
+                                url,
+                                json={
+                                    "chatId": chat_id,
+                                    "payload": notification.event
+                                },
+                                timeout=5.0
+                            )
+                            success_message = f"✅ Forwarded to {url}"
+                            logger.success(success_message)
+                            manager.safe_broadcast_log(success_message, "success")
+                        except Exception as e:
+                            error_message = f"❌ Error forwarding to {url}: {e}"
+                            logger.error(error_message)
+                            manager.safe_broadcast_log(error_message, "error")
+
+                for url in target_urls:
+                    asyncio.run(forward(url))
+            
+            log_message = f"🟢 Bot initialized successfully with instance {instance_id}"
+            logger.info(log_message)
+            manager.safe_broadcast_log(log_message, "success")
+            return new_bot
+            
+        except Exception as e:
+            log_message = f"❌ Failed to initialize GreenAPIBot: {e}"
+            logger.critical(log_message)
+            manager.safe_broadcast_log(log_message, "error")
+            return None
+    else:
+        log_message = "⚠️ Bot not started - Instance ID and Token not configured. Use Settings to configure."
+        logger.warning(log_message)
+        manager.safe_broadcast_log(log_message, "warning")
+        return None
+
+def start_bot_thread(bot_instance):
+    """Start the bot in a separate thread."""
+    if bot_instance:
+        thread = Thread(target=bot_instance.run_forever, daemon=True)
+        thread.start()
+        return thread
+    return None
+
+def restart_bot_component():
+    """Restart only the bot component."""
+    global bot, bot_thread
+    
+    log_message = "🔄 Restarting bot component..."
+    logger.info(log_message)
+    manager.safe_broadcast_log(log_message, "info")
+    
+    # Stop existing bot if running
+    if bot:
+        try:
+            # The bot library doesn't have a clean stop method, 
+            # so we'll rely on daemon threads being cleaned up
+            log_message = "🛑 Stopping existing bot instance..."
+            logger.info(log_message)
+            manager.safe_broadcast_log(log_message, "info")
+            bot = None
+            bot_thread = None
+        except Exception as e:
+            log_message = f"⚠️ Error stopping bot: {e}"
+            logger.warning(log_message)
+            manager.safe_broadcast_log(log_message, "warning")
+    
+    # Reload configuration
+    global config
+    config = load_config(CONFIG_PATH)
+    
+    # Initialize new bot with updated config
+    bot = initialize_bot()
+    bot_thread = start_bot_thread(bot)
+    
+    if bot:
+        log_message = "✅ Bot restarted successfully"
+        logger.info(log_message)
+        manager.safe_broadcast_log(log_message, "success")
+    else:
+        log_message = "❌ Bot restart failed or bot not configured"
+        logger.error(log_message)
+        manager.safe_broadcast_log(log_message, "error")
+
 def reload_config(new_config: Dict[str, Dict[str, List[str]]]) -> None:
     """
-    Reloads the configuration and updates the global config variable.
+    Reloads the configuration and restarts the bot if credentials changed.
 
     Args:
         new_config (Dict[str, Dict[str, List[str]]]): The new configuration to load.
     """
     global config
+    old_instance_id = config["green_api"].get("instance_id", "").strip()
+    old_token = config["green_api"].get("token", "").strip()
+    
     config = new_config
-    log_message = "🔁 Config reloaded"
-    logger.info(log_message)
-    manager.safe_broadcast_log(log_message, "info")
+    
+    new_instance_id = config["green_api"].get("instance_id", "").strip()
+    new_token = config["green_api"].get("token", "").strip()
+    
+    # Check if credentials changed
+    if old_instance_id != new_instance_id or old_token != new_token:
+        log_message = "🔧 Bot credentials changed, restarting bot..."
+        logger.info(log_message)
+        manager.safe_broadcast_log(log_message, "info")
+        restart_bot_component()
+    else:
+        log_message = "🔁 Config reloaded (routes updated)"
+        logger.info(log_message)
+        manager.safe_broadcast_log(log_message, "info")
 
 start_config_watcher(CONFIG_PATH, reload_config)
 
-# 🟢 Init bot
-try:
-    bot = GreenAPIBot(
-        config["green_api"]["instance_id"],
-        config["green_api"]["token"]
-    )
-    log_message = f"🟢 Bot initialized successfully with instance {config['green_api']['instance_id']}"
-    logger.info(log_message)
-    manager.safe_broadcast_log(log_message, "success")
-except Exception as e:
-    log_message = f"❌ Failed to initialize GreenAPIBot: {e}"
-    logger.critical(log_message)
-    manager.safe_broadcast_log(log_message, "error")
-    sys.exit(1)  # Exit the application if bot initialization fails
-
-@bot.router.message()
-def route_handler(notification: Notification) -> None:
-    """
-    Handles incoming messages and forwards them to the appropriate webhooks.
-
-    Args:
-        notification (Notification): The incoming message notification.
-    """
-    chat_id = notification.event["senderData"]["chatId"]
-    routes = config.get("routes", {})
-    target_urls = routes.get(chat_id)
-
-    if not target_urls:
-        log_message = f"🚫 No routes for chatId: {chat_id}"
-        logger.warning(log_message)
-        manager.safe_broadcast_log(log_message, "warning")
-        return
-
-    log_message = f"➡️ Forwarding from {chat_id} to {len(target_urls)} webhook(s)"
-    logger.info(log_message)
-    manager.safe_broadcast_log(log_message, "info")
-
-    async def forward(url: str):
-        """
-        Sends the notification payload to the specified webhook URL.
-
-        Args:
-            url (str): The webhook URL to forward the payload to.
-        """
-        async with httpx.AsyncClient() as client:
-            try:
-                await client.post(
-                    url,
-                    json={
-                        "chatId": chat_id,
-                        "payload": notification.event
-                    },
-                    timeout=5.0
-                )
-                success_message = f"✅ Forwarded to {url}"
-                logger.success(success_message)
-                manager.safe_broadcast_log(success_message, "success")
-            except Exception as e:
-                error_message = f"❌ Error forwarding to {url}: {e}"
-                logger.error(error_message)
-                manager.safe_broadcast_log(error_message, "error")
-
-    for url in target_urls:
-        asyncio.run(forward(url))
+# Initialize bot
+bot = initialize_bot()
+bot_thread = start_bot_thread(bot)
 
 def run_web_manager():
     """
@@ -173,8 +255,7 @@ def run_web_manager():
     server = uvicorn.Server(config)
     server.run()  # Start the server properly
 
-# Run bot and web manager in separate threads
-Thread(target=bot.run_forever, daemon=True).start()
+# Start web server
 Thread(target=run_web_manager, daemon=True).start()
 
 # Keep the main thread alive

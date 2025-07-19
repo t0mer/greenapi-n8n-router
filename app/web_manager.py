@@ -6,6 +6,11 @@ from config_loader import load_config, ensure_config
 from pydantic import BaseModel
 import yaml
 import os
+import sys
+import signal
+import threading
+import subprocess
+import time
 
 CONFIG_PATH = "config/config.yaml"
 
@@ -26,6 +31,10 @@ class RouteCreate(BaseModel):
 class RouteUpdate(BaseModel):
     chat_id: str
     target_urls: list[str]
+
+class SettingsUpdate(BaseModel):
+    instance_id: str
+    token: str
 
 @app.get("/")
 def routes_ui(request: Request):
@@ -96,45 +105,6 @@ def delete_route_ui(chat_id: str = Form(...)):
         yaml.dump(config, f)
 
     return RedirectResponse(url="/", status_code=302)
-
-@app.get("/settings")
-def get_settings():
-    """
-    Retrieves the general settings (instance_id and token).
-
-    Returns:
-        dict: The current general settings.
-    """
-    # Reload config to get latest data
-    global config
-    config = load_config(CONFIG_PATH)
-    
-    return config["green_api"]
-
-@app.post("/settings")
-def update_settings(instance_id: str, token: str):
-    """
-    Updates the general settings (instance_id and token).
-
-    Args:
-        instance_id (str): The new instance ID.
-        token (str): The new token.
-
-    Returns:
-        dict: A message indicating the settings were updated.
-    """
-    # Reload config to get latest data
-    global config
-    config = load_config(CONFIG_PATH)
-    
-    config["green_api"]["instance_id"] = instance_id
-    config["green_api"]["token"] = token
-
-    # Save updated config to file
-    with open(CONFIG_PATH, "w") as f:
-        yaml.dump(config, f)
-
-    return {"message": "Settings updated"}
 
 @app.get("/routes")
 def get_routes():
@@ -273,3 +243,84 @@ def get_execution_logs():
         list[dict]: An empty list since we're not tracking executions.
     """
     return []
+
+@app.get("/settings")
+def get_settings():
+    """
+    Retrieves the general settings (instance_id and token).
+
+    Returns:
+        dict: The current general settings.
+    """
+    # Reload config to get latest data
+    global config
+    config = load_config(CONFIG_PATH)
+    
+    return config["green_api"]
+
+@app.post("/settings")
+def update_settings(settings: SettingsUpdate):
+    """
+    Updates the general settings (instance_id and token).
+
+    Args:
+        settings (SettingsUpdate): The new settings data.
+
+    Returns:
+        dict: A message indicating the settings were updated.
+    """
+    # Reload config to get latest data
+    global config
+    config = load_config(CONFIG_PATH)
+    
+    config["green_api"]["instance_id"] = settings.instance_id
+    config["green_api"]["token"] = settings.token
+
+    # Save updated config to file
+    with open(CONFIG_PATH, "w") as f:
+        yaml.dump(config, f)
+
+    return {"message": "Settings updated"}
+
+@app.get("/health")
+def health_check():
+    """
+    Simple health check endpoint for monitoring server status.
+    
+    Returns:
+        dict: Server status information.
+    """
+    return {
+        "status": "healthy",
+        "timestamp": time.time(),
+        "message": "Server is running"
+    }
+
+def is_running_in_docker():
+    """
+    Detect if the application is running inside a Docker container.
+    """
+    try:
+        # Check for Docker-specific files
+        if os.path.exists('/.dockerenv'):
+            return True
+        
+        # Check cgroup for Docker
+        with open('/proc/1/cgroup', 'r') as f:
+            return 'docker' in f.read().lower()
+    except:
+        return False
+
+@app.post("/restart")
+def restart_bot():
+    """
+    Restarts only the bot component while keeping the web server running.
+    """
+    from app import restart_bot_component
+    
+    def perform_restart():
+        # Give time for the response to be sent
+        threading.Timer(1.0, restart_bot_component).start()
+    
+    perform_restart()
+    return {"message": "Bot restart initiated (web server remains running)"}

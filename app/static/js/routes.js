@@ -111,6 +111,10 @@ class RoutesManager {
                 this.showModal();
             }
             
+            if (e.target.closest('#settingsBtn')) {
+                this.showSettingsModal();
+            }
+            
             if (e.target.closest('.chat-card') && !e.target.closest('.edit-controls') && !e.target.closest('.delete-btn')) {
                 const chatId = e.target.closest('.chat-card').dataset.chatId;
                 this.openRouteDetails(chatId);
@@ -154,6 +158,149 @@ class RoutesManager {
             if (e.key === 'Escape') {
                 this.hideModal();
             }
+        });
+    }
+
+    async showSettingsModal() {
+        try {
+            // Fetch current settings
+            const response = await fetch('/settings');
+            const settings = await response.json();
+
+            const { value: formValues } = await Swal.fire({
+                title: '⚙️ Green API Settings',
+                html: `
+                    <div style="text-align: left;">
+                        <div style="margin-bottom: 15px;">
+                            <label for="instanceId" style="display: block; margin-bottom: 5px; font-weight: 500;">Instance ID:</label>
+                            <input id="instanceId" class="swal2-input" placeholder="Enter Instance ID" value="${settings.instance_id || ''}" style="margin: 0;">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label for="token" style="display: block; margin-bottom: 5px; font-weight: 500;">Token:</label>
+                            <input id="token" class="swal2-input" type="password" placeholder="Enter Token" value="${settings.token || ''}" style="margin: 0;">
+                        </div>
+                        <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 14px;">
+                            <p style="margin: 0; color: #666;">
+                                <strong>Note:</strong> Updating these settings will restart the entire application to apply changes.
+                            </p>
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Update & Restart',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#2196F3',
+                preConfirm: () => {
+                    const instanceId = document.getElementById('instanceId').value.trim();
+                    const token = document.getElementById('token').value.trim();
+                    
+                    if (!instanceId || !token) {
+                        Swal.showValidationMessage('Both Instance ID and Token are required');
+                        return false;
+                    }
+                    
+                    return { instanceId, token };
+                }
+            });
+
+            if (formValues) {
+                await this.updateSettings(formValues.instanceId, formValues.token);
+            }
+        } catch (error) {
+            console.error('Error loading settings:', error);
+            Swal.fire({
+                title: 'Error!',
+                text: 'Failed to load current settings.',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+        }
+    }
+
+    async updateSettings(instanceId, token) {
+        try {
+            // Show loading
+            Swal.fire({
+                title: 'Updating Settings...',
+                text: 'Please wait while we update the configuration.',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            const response = await fetch('/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    instance_id: instanceId,
+                    token: token
+                })
+            });
+
+            if (response.ok) {
+                // Show success and restart message
+                Swal.fire({
+                    title: 'Settings Updated!',
+                    text: 'Configuration saved successfully. The bot will restart in 3 seconds...',
+                    icon: 'success',
+                    timer: 3000,
+                    showConfirmButton: false,
+                    allowOutsideClick: false,
+                    allowEscapeKey: false
+                });
+
+                // Trigger restart after 3 seconds
+                setTimeout(async () => {
+                    try {
+                        await fetch('/restart', { method: 'POST' });
+                        // Show quick restart completion message
+                        this.showBotRestartMessage();
+                    } catch (error) {
+                        console.log('Restart triggered, showing completion...');
+                        this.showBotRestartMessage();
+                    }
+                }, 3000);
+            } else {
+                const error = await response.text();
+                Swal.fire({
+                    title: 'Error!',
+                    text: `Failed to update settings: ${error}`,
+                    icon: 'error',
+                    confirmButtonColor: '#dc3545'
+                });
+            }
+        } catch (error) {
+            console.error('Error updating settings:', error);
+            Swal.fire({
+                title: 'Error!',
+                text: 'Failed to update settings. Server may be unavailable.',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+        }
+    }
+
+    showBotRestartMessage() {
+        // Show a quick message about bot restart
+        Swal.fire({
+            title: 'Bot Restarted!',
+            html: `
+                <div style="text-align: center;">
+                    <p>✅ Bot component has been restarted successfully!</p>
+                    <p style="color: #666; font-size: 0.9em;">Web interface remained online during the restart.</p>
+                </div>
+            `,
+            icon: 'success',
+            timer: 3000,
+            showConfirmButton: false,
+            allowOutsideClick: true,
+            allowEscapeKey: true
         });
     }
 
