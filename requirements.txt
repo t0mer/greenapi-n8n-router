@@ -4,9 +4,9 @@ jinja2
 loguru
 fastapi
 uvicorn
+uvicorn[standard]
 aiofiles
 watchdog
-websocket
 sqlite-utils
 nest_asyncio
 python-multipart
