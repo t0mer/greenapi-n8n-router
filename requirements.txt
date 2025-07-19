@@ -1,7 +1,9 @@
 httpx
 pyyaml
+jinja2
 loguru
 fastapi
+aiofiles
 uvicorn
 watchdog
 sqlite-utils
