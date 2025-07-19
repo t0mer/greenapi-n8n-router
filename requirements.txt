@@ -6,6 +6,7 @@ fastapi
 uvicorn
 aiofiles
 watchdog
+websocket
 sqlite-utils
 nest_asyncio
 python-multipart
