@@ -1418,13 +1418,17 @@ class RoutesManager {
     connectWebSocket() {
         if (this.loggerSocket) return;
 
+        // Use the current window's protocol and host (including port)
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/logs`;
+        
+        console.log('Connecting to WebSocket:', wsUrl); // Debug log
         
         this.loggerSocket = new WebSocket(wsUrl);
 
         this.loggerSocket.onopen = () => {
             this.addLogEntry('WebSocket connected', 'success');
+            console.log('WebSocket connected successfully');
         };
 
         this.loggerSocket.onmessage = (event) => {
@@ -1432,13 +1436,15 @@ class RoutesManager {
             this.addLogEntry(logData.message, logData.level, logData.timestamp);
         };
 
-        this.loggerSocket.onclose = () => {
-            this.addLogEntry('WebSocket disconnected', 'warning');
+        this.loggerSocket.onclose = (event) => {
+            this.addLogEntry(`WebSocket disconnected (Code: ${event.code})`, 'warning');
+            console.log('WebSocket disconnected:', event.code, event.reason);
             this.loggerSocket = null;
         };
 
         this.loggerSocket.onerror = (error) => {
             this.addLogEntry('WebSocket error: ' + error, 'error');
+            console.error('WebSocket error:', error);
         };
     }
 
