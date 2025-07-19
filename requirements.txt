@@ -6,7 +6,6 @@ fastapi
 uvicorn
 aiofiles
 watchdog
-cryptography==44.0.1
 sqlite-utils
 nest_asyncio
 python-multipart
