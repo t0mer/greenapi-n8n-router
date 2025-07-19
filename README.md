@@ -47,32 +47,13 @@ services:
     image: techblog/greenapi-n8n-router
     container_name: greenapi-n8n-router
     volumes:
-      - ./app/config/config.yaml:/app/config/config.yaml
+      - ./app/config/:/app/config/
     restart: unless-stopped
     ports:
       - "8000:8000"
 ```
 
-2. **Create the configuration directory and file:**
-
-```bash
-# Create the config directory
-mkdir -p app/config
-
-# Create the configuration file
-cat > app/config/config.yaml << 'EOF'
-green_api:
-  instance_id: 'YOUR_INSTANCE_ID'
-  token: 'YOUR_TOKEN_HERE'
-
-routes:
-  # Example route - replace with your actual chat IDs and webhook URLs
-  1234567890@c.us:
-    - https://your-n8n.example.com/webhook/chat1
-EOF
-```
-
-3. **Start the application:**
+2. **Start the application:**
 
 ```bash
 # Start the container
@@ -82,7 +63,9 @@ docker-compose up -d
 docker-compose logs -f greenapi-n8n-router
 ```
 
-4. **Access the web interface:**
+**Note:** An empty configuration file will be automatically created on first startup at `app/config/config.yaml`. You can then configure your Green API credentials and routes through the web interface.
+
+3. **Access the web interface:**
 
 Open your browser and navigate to `http://localhost:8000`
 
@@ -92,24 +75,16 @@ Open your browser and navigate to `http://localhost:8000`
 # Create config directory
 mkdir -p app/config
 
-# Create configuration file
-cat > app/config/config.yaml << 'EOF'
-green_api:
-  instance_id: 'YOUR_INSTANCE_ID'
-  token: 'YOUR_TOKEN_HERE'
-routes:
-  1234567890@c.us:
-    - https://your-n8n.example.com/webhook/chat1
-EOF
-
 # Run the container
 docker run -d \
   --name greenapi-n8n-router \
   -p 8000:8000 \
-  -v $(pwd)/app/config/config.yaml:/app/config/config.yaml \
+  -v $(pwd)/app/config:/app/config \
   --restart unless-stopped \
   techblog/greenapi-n8n-router
 ```
+
+**Note:** An empty configuration file will be automatically created on first startup. Configure your settings through the web interface at `http://localhost:8000`.
 
 ### Option 3: Build from Source
 
