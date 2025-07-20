@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from config_loader import load_config, ensure_config
-from pydantic import BaseModel
+from pydantic import BaseModel, validator, HttpUrl
 import yaml
 import os
 import sys
@@ -11,6 +11,8 @@ import signal
 import threading
 import subprocess
 import time
+import re
+from typing import List
 
 CONFIG_PATH = "config/config.yaml"
 
@@ -24,17 +26,92 @@ config = load_config(CONFIG_PATH)
 
 templates = Jinja2Templates(directory="templates")
 
+def validate_webhook_url(url: str) -> str:
+    """
+    Validates that a webhook URL has proper format.
+    
+    Args:
+        url (str): The URL to validate
+        
+    Returns:
+        str: The validated URL
+        
+    Raises:
+        ValueError: If the URL is invalid
+    """
+    url = url.strip()
+    
+    if not url:
+        raise ValueError("URL cannot be empty")
+    
+    # Check if it's a valid URL format
+    url_pattern = re.compile(
+        r'^https?://'  # http:// or https://
+        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain...
+        r'localhost|'  # localhost...
+        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
+        r'(?::\d+)?'  # optional port
+        r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+    
+    if not url_pattern.match(url):
+        raise ValueError("Invalid URL format. URL must start with http:// or https:// and have valid structure")
+    
+    return url
+
 class RouteCreate(BaseModel):
     chat_id: str
-    target_urls: list[str]
+    target_urls: List[str]
+    name: str = None
+
+    @validator('target_urls')
+    def validate_urls(cls, v):
+        if not v or len(v) == 0:
+            raise ValueError("At least one webhook URL is required")
+        
+        validated_urls = []
+        for i, url in enumerate(v):
+            try:
+                validated_url = validate_webhook_url(url)
+                validated_urls.append(validated_url)
+            except ValueError as e:
+                raise ValueError(f"URL {i+1}: {str(e)}")
+        
+        # Check for duplicates
+        if len(set(validated_urls)) != len(validated_urls):
+            raise ValueError("Duplicate URLs are not allowed")
+        
+        return validated_urls
 
 class RouteUpdate(BaseModel):
     chat_id: str
-    target_urls: list[str]
+    target_urls: List[str]
+    name: str = None
+
+    @validator('target_urls')
+    def validate_urls(cls, v):
+        if not v or len(v) == 0:
+            raise ValueError("At least one webhook URL is required")
+        
+        validated_urls = []
+        for i, url in enumerate(v):
+            try:
+                validated_url = validate_webhook_url(url)
+                validated_urls.append(validated_url)
+            except ValueError as e:
+                raise ValueError(f"URL {i+1}: {str(e)}")
+        
+        # Check for duplicates
+        if len(set(validated_urls)) != len(validated_urls):
+            raise ValueError("Duplicate URLs are not allowed")
+        
+        return validated_urls
 
 class SettingsUpdate(BaseModel):
     instance_id: str
     token: str
+
+class CardNameUpdate(BaseModel):
+    name: str
 
 @app.get("/")
 def routes_ui(request: Request):
@@ -128,24 +205,35 @@ def add_route(route_data: RouteCreate):
     Adds a new route for a chat ID.
 
     Args:
-        route_data (RouteCreate): The route data containing chat_id and target_urls.
+        route_data (RouteCreate): The route data containing chat_id, target_urls, and optional name.
 
     Returns:
         dict: A message indicating the route was added.
     """
-    # Reload config to get latest data
-    global config
-    config = load_config(CONFIG_PATH)
+    try:
+        # Reload config to get latest data
+        global config
+        config = load_config(CONFIG_PATH)
+        
+        if route_data.chat_id in config["routes"]:
+            raise HTTPException(status_code=400, detail="Route already exists")
+        
+        # Use provided name or default to chat_id
+        name = route_data.name if route_data.name else route_data.chat_id
+        
+        config["routes"][route_data.chat_id] = {
+            "name": name,
+            "target_urls": route_data.target_urls
+        }
+
+        # Save updated config to file
+        with open(CONFIG_PATH, "w") as f:
+            yaml.dump(config, f)
+
+        return {"message": "Route added"}
     
-    if route_data.chat_id in config["routes"]:
-        raise HTTPException(status_code=400, detail="Route already exists")
-    config["routes"][route_data.chat_id] = route_data.target_urls
-
-    # Save updated config to file
-    with open(CONFIG_PATH, "w") as f:
-        yaml.dump(config, f)
-
-    return {"message": "Route added"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.put("/routes/{chat_id}")
 def update_route(chat_id: str, route_update: RouteUpdate):
@@ -159,20 +247,34 @@ def update_route(chat_id: str, route_update: RouteUpdate):
     Returns:
         dict: A message indicating the route was updated.
     """
-    # Reload config to get latest data
-    global config
-    config = load_config(CONFIG_PATH)
-    
-    if chat_id not in config["routes"]:
-        raise HTTPException(status_code=404, detail="Route not found")
-    
-    config["routes"][chat_id] = route_update.target_urls
+    try:
+        # Reload config to get latest data
+        global config
+        config = load_config(CONFIG_PATH)
+        
+        if chat_id not in config["routes"]:
+            raise HTTPException(status_code=404, detail="Route not found")
+        
+        # Preserve existing name if not provided in update
+        existing_route = config["routes"][chat_id]
+        if isinstance(existing_route, dict):
+            existing_name = existing_route.get("name", chat_id)
+        else:
+            existing_name = chat_id
+        
+        config["routes"][chat_id] = {
+            "name": route_update.name if route_update.name else existing_name,
+            "target_urls": route_update.target_urls
+        }
 
-    # Save updated config to file
-    with open(CONFIG_PATH, "w") as f:
-        yaml.dump(config, f)
+        # Save updated config to file
+        with open(CONFIG_PATH, "w") as f:
+            yaml.dump(config, f)
 
-    return {"message": "Route updated"}
+        return {"message": "Route updated"}
+    
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.delete("/routes/{chat_id}")
 def delete_route(chat_id: str):
@@ -232,6 +334,50 @@ def delete_route_url(chat_id: str, url: str):
         yaml.dump(config, f)
 
     return {"message": "URL removed from route"}
+
+@app.put("/routes/{chat_id}/name")
+def update_card_name(chat_id: str, name_update: CardNameUpdate):
+    """
+    Updates only the name/title of a card.
+
+    Args:
+        chat_id (str): The chat ID.
+        name_update (CardNameUpdate): The new name for the card.
+
+    Returns:
+        dict: A message indicating the name was updated.
+    """
+    # Reload config to get latest data
+    global config
+    config = load_config(CONFIG_PATH)
+    
+    if chat_id not in config["routes"]:
+        raise HTTPException(status_code=404, detail="Route not found")
+    
+    route_data = config["routes"][chat_id]
+    
+    # Handle both legacy and new format
+    if isinstance(route_data, list):
+        # Legacy format: convert to new format
+        config["routes"][chat_id] = {
+            "name": name_update.name,
+            "target_urls": route_data
+        }
+    elif isinstance(route_data, dict):
+        # New format: update name
+        config["routes"][chat_id]["name"] = name_update.name
+    else:
+        # Single URL format: convert to new format
+        config["routes"][chat_id] = {
+            "name": name_update.name,
+            "target_urls": [route_data] if isinstance(route_data, str) else []
+        }
+
+    # Save updated config to file
+    with open(CONFIG_PATH, "w") as f:
+        yaml.dump(config, f)
+
+    return {"message": "Card name updated"}
 
 @app.get("/execution_counts")
 def get_execution_logs():

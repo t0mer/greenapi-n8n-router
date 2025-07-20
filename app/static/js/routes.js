@@ -64,19 +64,39 @@ class RoutesManager {
 
     transformRoutesToCards(routesConfig) {
         const routes = [];
-        for (const [chatId, webhookUrls] of Object.entries(routesConfig)) {
-            // Handle both array of URLs and single URL
-            const urlArray = Array.isArray(webhookUrls) ? webhookUrls : [webhookUrls];
-            const primaryUrl = urlArray[0] || '';
+        for (const [chatId, routeData] of Object.entries(routesConfig)) {
+            let name, webhookUrls;
+            
+            // Handle both legacy and new format
+            if (Array.isArray(routeData)) {
+                // Legacy format: [urls...]
+                name = chatId;
+                webhookUrls = routeData;
+            } else if (typeof routeData === 'object' && routeData.target_urls) {
+                // New format: {name, target_urls}
+                name = routeData.name || chatId;
+                webhookUrls = routeData.target_urls || [];
+            } else if (typeof routeData === 'string') {
+                // Single URL format
+                name = chatId;
+                webhookUrls = [routeData];
+            } else {
+                // Fallback
+                name = chatId;
+                webhookUrls = [];
+            }
+            
+            const primaryUrl = webhookUrls[0] || '';
             
             routes.push({
                 id: chatId,
+                name: name,
                 webhookUrl: primaryUrl,
-                webhookUrls: urlArray, // Keep all URLs for details view
-                rawData: { webhookUrls }
+                webhookUrls: webhookUrls,
+                rawData: routeData
             });
         }
-        return routes.sort((a, b) => a.id.localeCompare(b.id));
+        return routes.sort((a, b) => a.name.localeCompare(b.name));
     }
 
     formatLastActivity(timestamp) {
@@ -115,9 +135,15 @@ class RoutesManager {
                 this.showSettingsModal();
             }
             
-            if (e.target.closest('.chat-card') && !e.target.closest('.edit-controls') && !e.target.closest('.delete-btn')) {
+            if (e.target.closest('.chat-card') && !e.target.closest('.edit-controls') && !e.target.closest('.delete-btn') && !e.target.closest('.edit-name-btn')) {
                 const chatId = e.target.closest('.chat-card').dataset.chatId;
                 this.openRouteDetails(chatId);
+            }
+            
+            if (e.target.closest('.edit-name-btn')) {
+                e.stopPropagation();
+                const chatId = e.target.closest('.chat-card').dataset.chatId;
+                this.enableNameEdit(chatId);
             }
             
             if (e.target.closest('.save-edit')) {
@@ -130,6 +156,18 @@ class RoutesManager {
                 e.stopPropagation();
                 const chatId = e.target.closest('.chat-card').dataset.chatId;
                 this.cancelEdit(chatId);
+            }
+            
+            if (e.target.closest('.save-name-edit')) {
+                e.stopPropagation();
+                const chatId = e.target.closest('.chat-card').dataset.chatId;
+                this.saveNameEdit(chatId);
+            }
+            
+            if (e.target.closest('.cancel-name-edit')) {
+                e.stopPropagation();
+                const chatId = e.target.closest('.chat-card').dataset.chatId;
+                this.cancelNameEdit(chatId);
             }
             
             if (e.target.closest('.delete-btn')) {
@@ -350,7 +388,18 @@ class RoutesManager {
 
         card.innerHTML = `
             <div class="card-header">
-                <h3 class="chat-id">${route.id}</h3>
+                <div class="card-title-section">
+                    <h3 class="card-name" title="${route.name}">${route.name}</h3>
+                    <input type="text" class="name-edit" value="${route.name}" style="display: none;">
+                    <div class="chat-id-subtitle">${route.id}</div>
+                </div>
+                <div class="header-controls">
+                    <button class="edit-name-btn" title="Edit name">✏️</button>
+                    <div class="name-edit-controls" style="display: none;">
+                        <button class="save-name-edit" title="Save name">✅</button>
+                        <button class="cancel-name-edit" title="Cancel">❌</button>
+                    </div>
+                </div>
             </div>
             <div class="card-content">
                 <p><strong>🔗 Webhook:</strong> 
@@ -432,8 +481,15 @@ class RoutesManager {
         const webhookEdit = card.querySelector('.webhook-edit');
         const newUrl = webhookEdit.value.trim();
 
-        if (!newUrl) {
-            alert('Webhook URL cannot be empty');
+        // Validate URL
+        const validation = this.validateWebhookUrl(newUrl);
+        if (!validation.valid) {
+            Swal.fire({
+                title: 'Invalid URL!',
+                text: validation.message,
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
             return;
         }
 
@@ -468,13 +524,23 @@ class RoutesManager {
                 this.showNotification('Webhook URL updated successfully!', 'success');
             } else {
                 const error = await response.text();
-                alert(`Failed to update webhook URL: ${error}`);
+                Swal.fire({
+                    title: 'Error!',
+                    text: `Failed to update webhook URL: ${error}`,
+                    icon: 'error',
+                    confirmButtonColor: '#dc3545'
+                });
                 saveBtn.textContent = '✅';
                 saveBtn.disabled = false;
             }
         } catch (error) {
             console.error('Error updating webhook URL:', error);
-            alert('Failed to update webhook URL. Server may be unavailable.');
+            Swal.fire({
+                title: 'Error!',
+                text: 'Failed to update webhook URL. Server may be unavailable.',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
             const saveBtn = card.querySelector('.save-edit');
             saveBtn.textContent = '✅';
             saveBtn.disabled = false;
@@ -633,6 +699,11 @@ class RoutesManager {
                 <h2>Create New Route</h2>
                 <form id="routeForm">
                     <div class="form-group">
+                        <label for="cardName">Card Name:</label>
+                        <input type="text" id="cardName" name="cardName" required 
+                            placeholder="e.g., John Doe, Support Team, etc.">
+                    </div>
+                    <div class="form-group">
                         <label for="chatId">Chat ID:</label>
                         <input type="text" id="chatId" name="chatId" required 
                             placeholder="e.g., 972523531857@c.us">
@@ -668,6 +739,12 @@ class RoutesManager {
                 this.removeWebhookInput(e.target.closest('.webhook-input-item'));
             }
         });
+
+        // Setup URL validation for initial input
+        const initialInput = modal.querySelector('.webhook-url-input');
+        if (initialInput) {
+            this.setupUrlValidation(initialInput);
+        }
     }
 
     addWebhookInput() {
@@ -680,8 +757,12 @@ class RoutesManager {
         `;
         webhooksList.appendChild(newWebhookInput);
         
+        // Setup validation for new input
+        const newInput = newWebhookInput.querySelector('.webhook-url-input');
+        this.setupUrlValidation(newInput);
+        
         // Focus on the new input
-        newWebhookInput.querySelector('.webhook-url-input').focus();
+        newInput.focus();
     }
 
     removeWebhookInput(webhookInputItem) {
@@ -704,17 +785,40 @@ class RoutesManager {
     async handleFormSubmit(form) {
         const formData = new FormData(form);
         const chatId = formData.get('chatId');
+        const cardName = formData.get('cardName');
         
         // Collect all webhook URLs
         const webhookInputs = form.querySelectorAll('.webhook-url-input');
-        const webhookUrls = Array.from(webhookInputs)
-            .map(input => input.value.trim())
-            .filter(url => url !== ''); // Remove empty URLs
+        const webhookUrls = [];
+        const validationErrors = [];
+
+        // Validate each URL
+        webhookInputs.forEach((input, index) => {
+            const url = input.value.trim();
+            if (url !== '') {
+                const validation = this.validateWebhookUrl(url);
+                if (!validation.valid) {
+                    validationErrors.push(`URL ${index + 1}: ${validation.message}`);
+                } else {
+                    webhookUrls.push(url);
+                }
+            }
+        });
+
+        if (validationErrors.length > 0) {
+            Swal.fire({
+                title: 'Invalid URLs!',
+                html: `Please fix the following URL errors:<br><br>${validationErrors.join('<br>')}`,
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+            return;
+        }
 
         if (webhookUrls.length === 0) {
             Swal.fire({
                 title: 'Error!',
-                text: 'Please enter at least one webhook URL.',
+                text: 'Please enter at least one valid webhook URL.',
                 icon: 'error',
                 confirmButtonColor: '#dc3545'
             });
@@ -735,6 +839,7 @@ class RoutesManager {
 
         const newRoute = {
             chat_id: chatId,
+            name: cardName,
             target_urls: webhookUrls
         };
 
@@ -773,9 +878,13 @@ class RoutesManager {
                     </div>
                 `;
                 
+                // Setup validation for reset input
+                const resetInput = webhooksList.querySelector('.webhook-url-input');
+                this.setupUrlValidation(resetInput);
+                
                 Swal.fire({
                     title: 'Success!',
-                    text: `Route created successfully with ${webhookUrls.length} webhook${webhookUrls.length > 1 ? 's' : ''}!`,
+                    text: `Route "${cardName}" created successfully with ${webhookUrls.length} webhook${webhookUrls.length > 1 ? 's' : ''}!`,
                     icon: 'success',
                     timer: 2000,
                     showConfirmButton: false
@@ -833,6 +942,7 @@ class RoutesManager {
                 <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
                 <h2>Route Details</h2>
                 <div class="route-details">
+                    <p><strong>Card Name:</strong> ${route.name}</p>
                     <p><strong>Chat ID:</strong> ${route.id}</p>
                     <p><strong>Webhook URL(s):</strong></p>
                     <div class="webhooks-list">
@@ -932,10 +1042,12 @@ class RoutesManager {
         const addInput = modal.querySelector('.add-webhook-input');
         const newUrl = addInput.value.trim();
 
-        if (!newUrl) {
+        // Validate URL
+        const validation = this.validateWebhookUrl(newUrl);
+        if (!validation.valid) {
             Swal.fire({
-                title: 'Error!',
-                text: 'Webhook URL cannot be empty',
+                title: 'Invalid URL!',
+                text: validation.message,
                 icon: 'error',
                 confirmButtonColor: '#dc3545'
             });
@@ -1208,10 +1320,12 @@ class RoutesManager {
         const newUrl = editInput.value.trim();
         const webhookIndex = parseInt(webhookItem.dataset.index);
 
-        if (!newUrl) {
+        // Validate URL
+        const validation = this.validateWebhookUrl(newUrl);
+        if (!validation.valid) {
             Swal.fire({
-                title: 'Error!',
-                text: 'Webhook URL cannot be empty',
+                title: 'Invalid URL!',
+                text: validation.message,
                 icon: 'error',
                 confirmButtonColor: '#dc3545'
             });
@@ -1287,6 +1401,137 @@ class RoutesManager {
             saveBtn.textContent = '✅';
             saveBtn.disabled = false;
         }
+    }
+
+    enableNameEdit(chatId) {
+        const card = document.querySelector(`[data-chat-id="${chatId}"]`);
+        if (!card) return;
+
+        const nameDisplay = card.querySelector('.card-name');
+        const nameEdit = card.querySelector('.name-edit');
+        const editBtn = card.querySelector('.edit-name-btn');
+        const nameEditControls = card.querySelector('.name-edit-controls');
+
+        // Hide display elements and show edit elements
+        nameDisplay.style.display = 'none';
+        nameEdit.style.display = 'inline-block';
+        editBtn.style.display = 'none';
+        nameEditControls.style.display = 'flex';
+
+        // Focus on the input
+        nameEdit.focus();
+        nameEdit.select();
+
+        // Disable card dragging during edit
+        card.draggable = false;
+    }
+
+    cancelNameEdit(chatId) {
+        const card = document.querySelector(`[data-chat-id="${chatId}"]`);
+        if (!card) return;
+
+        const route = this.routes.find(r => r.id === chatId);
+        const nameDisplay = card.querySelector('.card-name');
+        const nameEdit = card.querySelector('.name-edit');
+        const editBtn = card.querySelector('.edit-name-btn');
+        const nameEditControls = card.querySelector('.name-edit-controls');
+
+        // Reset input to original value
+        nameEdit.value = route.name || route.id;
+
+        // Show display elements and hide edit elements
+        nameDisplay.style.display = 'inline';
+        nameEdit.style.display = 'none';
+        editBtn.style.display = 'inline-block';
+        nameEditControls.style.display = 'none';
+
+        // Re-enable card dragging
+        card.draggable = true;
+    }
+
+    async saveNameEdit(chatId) {
+        const card = document.querySelector(`[data-chat-id="${chatId}"]`);
+        if (!card) return;
+
+        const nameEdit = card.querySelector('.name-edit');
+        const newName = nameEdit.value.trim();
+
+        if (!newName) {
+            Swal.fire({
+                title: 'Error!',
+                text: 'Card name cannot be empty',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+            return;
+        }
+
+        try {
+            // Show loading state
+            const saveBtn = card.querySelector('.save-name-edit');
+            saveBtn.textContent = '⏳';
+            saveBtn.disabled = true;
+
+            const response = await fetch(`/routes/${chatId}/name`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: newName
+                })
+            });
+
+            if (response.ok) {
+                // Update the route in memory
+                const route = this.routes.find(r => r.id === chatId);
+                if (route) {
+                    route.name = newName;
+                }
+
+                // Update the card display
+                this.updateCardName(chatId, newName);
+                this.cancelNameEdit(chatId);
+                
+                Swal.fire({
+                    title: 'Updated!',
+                    text: 'Card name updated successfully!',
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                const error = await response.text();
+                Swal.fire({
+                    title: 'Error!',
+                    text: `Failed to update card name: ${error}`,
+                    icon: 'error',
+                    confirmButtonColor: '#dc3545'
+                });
+                saveBtn.textContent = '✅';
+                saveBtn.disabled = false;
+            }
+        } catch (error) {
+            console.error('Error updating card name:', error);
+            Swal.fire({
+                title: 'Error!',
+                text: 'Failed to update card name. Server may be unavailable.',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+            const saveBtn = card.querySelector('.save-name-edit');
+            saveBtn.textContent = '✅';
+            saveBtn.disabled = false;
+        }
+    }
+
+    updateCardName(chatId, newName) {
+        const card = document.querySelector(`[data-chat-id="${chatId}"]`);
+        if (!card) return;
+
+        const nameDisplay = card.querySelector('.card-name');
+        nameDisplay.textContent = newName;
+        nameDisplay.title = newName;
     }
 
     showNotification(message, type = 'info') {
@@ -1480,6 +1725,121 @@ class RoutesManager {
         while (loggerContent.children.length > 100) {
             loggerContent.removeChild(loggerContent.firstChild);
         }
+    }
+
+    isValidUrl(string) {
+        try {
+            const url = new URL(string);
+            // Ensure it's http or https
+            return url.protocol === 'http:' || url.protocol === 'https:';
+        } catch (_) {
+            return false;
+        }
+    }
+
+    validateWebhookUrl(url) {
+        if (!url || url.trim() === '') {
+            return { valid: false, message: 'URL cannot be empty' };
+        }
+
+        const trimmedUrl = url.trim();
+        
+        if (!this.isValidUrl(trimmedUrl)) {
+            return { valid: false, message: 'Please enter a valid URL (must start with http:// or https://)' };
+        }
+
+        // Additional checks for webhook URLs
+        if (!trimmedUrl.includes('webhook')) {
+            return { 
+                valid: true, 
+                warning: 'URL doesn\'t contain "webhook" - are you sure this is correct?' 
+            };
+        }
+
+        return { valid: true };
+    }
+
+    showUrlValidationError(input, message) {
+        // Remove existing error
+        this.clearUrlValidationError(input);
+
+        // Add error styling
+        input.style.borderColor = '#dc3545';
+        input.style.boxShadow = '0 0 0 2px rgba(220, 53, 69, 0.2)';
+
+        // Create error message element
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'url-validation-error';
+        errorDiv.style.cssText = `
+            color: #dc3545;
+            font-size: 12px;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        `;
+        errorDiv.innerHTML = `<span>⚠️</span> ${message}`;
+
+        // Insert after the input
+        input.parentNode.insertBefore(errorDiv, input.nextSibling);
+    }
+
+    showUrlValidationWarning(input, message) {
+        // Remove existing error/warning
+        this.clearUrlValidationError(input);
+
+        // Add warning styling
+        input.style.borderColor = '#ffc107';
+        input.style.boxShadow = '0 0 0 2px rgba(255, 193, 7, 0.2)';
+
+        // Create warning message element
+        const warningDiv = document.createElement('div');
+        warningDiv.className = 'url-validation-error';
+        warningDiv.style.cssText = `
+            color: #856404;
+            font-size: 12px;
+            margin-top: 4px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        `;
+        warningDiv.innerHTML = `<span>⚠️</span> ${message}`;
+
+        // Insert after the input
+        input.parentNode.insertBefore(warningDiv, input.nextSibling);
+    }
+
+    clearUrlValidationError(input) {
+        // Reset input styling
+        input.style.borderColor = '';
+        input.style.boxShadow = '';
+
+        // Remove error message
+        const existingError = input.parentNode.querySelector('.url-validation-error');
+        if (existingError) {
+            existingError.remove();
+        }
+    }
+
+    setupUrlValidation(input) {
+        input.addEventListener('blur', () => {
+            const validation = this.validateWebhookUrl(input.value);
+            
+            if (!validation.valid) {
+                this.showUrlValidationError(input, validation.message);
+            } else if (validation.warning) {
+                this.showUrlValidationWarning(input, validation.warning);
+            } else {
+                this.clearUrlValidationError(input);
+            }
+        });
+
+        input.addEventListener('input', () => {
+            // Clear validation on input to give immediate feedback when correcting
+            if (input.parentNode.querySelector('.url-validation-error')) {
+                this.clearUrlValidationError(input);
+            }
+        });
     }
 }
 

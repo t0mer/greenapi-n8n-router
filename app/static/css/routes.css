@@ -68,8 +68,110 @@ body {
 .card-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 15px;
+    gap: 10px;
+}
+
+.card-title-section {
+    flex: 1;
+    min-width: 0; /* Allow text truncation */
+}
+
+.card-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 4px 0;
+    word-wrap: break-word;
+    line-height: 1.3;
+}
+
+.name-edit {
+    width: 100%;
+    font-size: 1.2rem;
+    font-weight: 600;
+    padding: 4px 8px;
+    border: 2px solid #2196F3;
+    border-radius: 4px;
+    background: white;
+    color: #333;
+    margin: 0 0 4px 0;
+}
+
+.name-edit:focus {
+    outline: none;
+    border-color: #1976D2;
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+.chat-id-subtitle {
+    font-size: 0.85rem;
+    color: #666;
+    font-weight: 400;
+    word-break: break-all;
+}
+
+.header-controls {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.edit-name-btn {
+    background: none;
+    border: none;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+    color: #666;
+    min-width: 32px;
+}
+
+.edit-name-btn:hover {
+    background-color: #f0f0f0;
+}
+
+.name-edit-controls {
+    display: none;
+    gap: 5px;
+    align-items: center;
+}
+
+.save-name-edit,
+.cancel-name-edit {
+    background: none;
+    border: none;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+    min-width: 32px;
+}
+
+.save-name-edit {
+    color: #28a745;
+}
+
+.save-name-edit:hover {
+    background-color: #e8f5e8;
+}
+
+.cancel-name-edit {
+    color: #dc3545;
+}
+
+.cancel-name-edit:hover {
+    background-color: #ffeaea;
+}
+
+.save-name-edit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .edit-icon {
@@ -320,6 +422,18 @@ body {
         right: 5%;
         left: 5%;
         min-width: 280px;
+    }
+
+    .header-controls {
+        align-self: flex-end;
+    }
+    
+    .card-name {
+        font-size: 1.1rem;
+    }
+    
+    .name-edit {
+        font-size: 1.1rem;
     }
 }
 
@@ -609,6 +723,7 @@ body {
     border: 1px solid #ddd;
     border-radius: 6px;
     font-size: 14px;
+    transition: border-color 0.3s, box-shadow 0.3s;
 }
 
 .webhook-url-input:focus {
@@ -808,4 +923,38 @@ body {
     border-radius: 50%;
     animation: spin 1s linear infinite;
     display: inline-block;
+}
+
+/* URL Validation Styles */
+.url-validation-error {
+    margin-top: 4px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    line-height: 1.3;
+}
+
+.webhook-url-input.error {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.2) !important;
+}
+
+.webhook-url-input.warning {
+    border-color: #ffc107 !important;
+    box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.2) !important;
+}
+
+.webhook-url-input.valid {
+    border-color: #28a745 !important;
+    box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.2) !important;
+}
+
+/* Enhanced form validation */
+.form-group input:invalid {
+    border-color: #dc3545;
+}
+
+.form-group input:valid {
+    border-color: #28a745;
 }

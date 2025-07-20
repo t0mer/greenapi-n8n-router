@@ -1,15 +1,18 @@
 import os
 import yaml
 from loguru import logger
-from typing import Dict, List
+from typing import Dict, List, Union
 
-DEFAULT_CONFIG: Dict[str, Dict[str, List[str]]] = {
+DEFAULT_CONFIG: Dict[str, Union[Dict[str, str], Dict[str, Union[str, List[str]]]]] = {
     "green_api": {
         "instance_id": "",
         "token": ""
     },
     "routes": {
-        "1234567890@c.us": ["https://n8n.local/webhook/one"]
+        "1234567890@c.us": {
+            "name": "Example Contact",
+            "target_urls": ["https://n8n.local/webhook/one"]
+        }
     }
 }
 
@@ -29,7 +32,41 @@ def ensure_config(path: str = "config/config.yaml") -> None:
         except Exception as e:
             logger.error(f"Failed to create config file at {path}: {e}")
 
-def load_config(path: str = "config/config.yaml") -> Dict[str, Dict[str, List[str]]]:
+def migrate_legacy_config(config: Dict) -> Dict:
+    """
+    Migrates legacy configuration format to new format with names.
+    
+    Args:
+        config (Dict): The configuration to migrate.
+        
+    Returns:
+        Dict: The migrated configuration.
+    """
+    if "routes" in config:
+        migrated_routes = {}
+        for chat_id, target_urls in config["routes"].items():
+            if isinstance(target_urls, list):
+                # Legacy format: chat_id -> [urls]
+                migrated_routes[chat_id] = {
+                    "name": chat_id,  # Use chat_id as default name
+                    "target_urls": target_urls
+                }
+            elif isinstance(target_urls, dict):
+                # New format: chat_id -> {name, target_urls}
+                migrated_routes[chat_id] = target_urls
+                # Ensure name exists
+                if "name" not in target_urls:
+                    migrated_routes[chat_id]["name"] = chat_id
+            else:
+                # Handle single URL case
+                migrated_routes[chat_id] = {
+                    "name": chat_id,
+                    "target_urls": [target_urls] if isinstance(target_urls, str) else []
+                }
+        config["routes"] = migrated_routes
+    return config
+
+def load_config(path: str = "config/config.yaml") -> Dict:
     """
     Loads the configuration file. Returns the default configuration if the file is missing or invalid.
 
@@ -37,7 +74,7 @@ def load_config(path: str = "config/config.yaml") -> Dict[str, Dict[str, List[st
         path (str): Path to the configuration file.
 
     Returns:
-        Dict[str, Dict[str, List[str]]]: The loaded configuration.
+        Dict: The loaded configuration.
     """
     if not os.path.exists(path):
         logger.error(f"Config file not found at {path}. Using default configuration.")
@@ -49,6 +86,9 @@ def load_config(path: str = "config/config.yaml") -> Dict[str, Dict[str, List[st
             if not config:
                 logger.error("Config file is empty or invalid. Using default configuration.")
                 return DEFAULT_CONFIG
+            
+            # Migrate legacy format if needed
+            config = migrate_legacy_config(config)
             return config
     except Exception as e:
         logger.error(f"Failed to load config file at {path}: {e}. Using default configuration.")

@@ -110,15 +110,38 @@ def initialize_bot():
                 """
                 chat_id = notification.event["senderData"]["chatId"]
                 routes = config.get("routes", {})
-                target_urls = routes.get(chat_id)
+                route_data = routes.get(chat_id)
 
-                if not target_urls:
+                if not route_data:
                     log_message = f"🚫 No routes for chatId: {chat_id}"
                     logger.warning(log_message)
                     manager.safe_broadcast_log(log_message, "warning")
                     return
 
-                log_message = f"➡️ Forwarding from {chat_id} to {len(target_urls)} webhook(s)"
+                # Handle both legacy and new format
+                if isinstance(route_data, list):
+                    # Legacy format: [urls...]
+                    target_urls = route_data
+                    route_name = chat_id
+                elif isinstance(route_data, dict):
+                    # New format: {name, target_urls}
+                    target_urls = route_data.get("target_urls", [])
+                    route_name = route_data.get("name", chat_id)
+                elif isinstance(route_data, str):
+                    # Single URL format
+                    target_urls = [route_data]
+                    route_name = chat_id
+                else:
+                    target_urls = []
+                    route_name = chat_id
+
+                if not target_urls:
+                    log_message = f"🚫 No webhook URLs configured for {route_name} ({chat_id})"
+                    logger.warning(log_message)
+                    manager.safe_broadcast_log(log_message, "warning")
+                    return
+
+                log_message = f"➡️ Forwarding from {route_name} ({chat_id}) to {len(target_urls)} webhook(s)"
                 logger.info(log_message)
                 manager.safe_broadcast_log(log_message, "info")
 
