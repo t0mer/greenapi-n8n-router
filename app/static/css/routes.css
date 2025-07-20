@@ -958,3 +958,175 @@ body {
 .form-group input:valid {
     border-color: #28a745;
 }
+
+/* Select2 Customizations */
+.select2-container {
+    font-size: 14px !important;
+}
+
+.select2-container--default .select2-selection--single {
+    height: 42px !important;
+    border: 1px solid #ddd !important;
+    border-radius: 6px !important;
+    padding: 0 !important;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 40px !important;
+    padding-left: 10px !important;
+    color: #333 !important;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 40px !important;
+    right: 10px !important;
+}
+
+.select2-dropdown {
+    border: 1px solid #ddd !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+
+.select2-container--default .select2-search--dropdown .select2-search__field {
+    border: 1px solid #ddd !important;
+    border-radius: 4px !important;
+    padding: 8px !important;
+}
+
+.select2-container--default .select2-results__option {
+    padding: 8px 12px !important;
+    border-bottom: 1px solid #f0f0f0 !important;
+    min-height: 40px !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.select2-container--default .select2-results__option:last-child {
+    border-bottom: none !important;
+}
+
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: #2196F3 !important;
+    color: white !important;
+}
+
+.select2-container--default .select2-results__option[aria-selected=true] {
+    background-color: #e3f2fd !important;
+    color: #1976d2 !important;
+}
+
+.contact-result {
+    display: flex;
+    flex-direction: column;
+    padding: 2px 0;
+}
+
+.contact-name {
+    font-weight: 500;
+    color: #333;
+    font-size: 14px;
+}
+
+.contact-id {
+    font-size: 12px;
+    color: #666;
+    margin-top: 2px;
+    font-family: monospace;
+}
+
+.contact-result {
+    display: flex;
+    flex-direction: column;
+}
+
+.contact-name {
+    font-weight: 500;
+    color: #333;
+}
+
+.contact-id {
+    font-size: 12px;
+    color: #666;
+    margin-top: 2px;
+}
+
+.select2-container.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 30px;
+    width: 16px;
+    height: 16px;
+    margin-top: -8px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #2196F3;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    z-index: 10;
+}
+
+.form-text {
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+    display: block;
+}
+
+.text-muted {
+    color: #666 !important;
+}
+
+/* Override Select2 focus states */
+.select2-container--default.select2-container--focus .select2-selection--single {
+    border-color: #2196F3 !important;
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2) !important;
+}
+
+/* Credentials Warning Badge */
+.credentials-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #dc3545;
+    color: white;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    cursor: help;
+    animation: pulse-warning 2s infinite;
+    z-index: 10;
+}
+
+@keyframes pulse-warning {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+    }
+    70% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 6px rgba(220, 53, 69, 0);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+    }
+}
+
+.credentials-badge:hover {
+    background: #c82333;
+    transform: scale(1.1);
+    animation: none;
+}
+
+/* Ensure settings button can contain the badge */
+#settingsBtn {
+    position: relative !important;
+}
