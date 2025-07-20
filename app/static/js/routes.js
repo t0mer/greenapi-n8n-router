@@ -12,6 +12,7 @@ class RoutesManager {
         this.setupEventListeners();
         this.setupLogger();
         this.loadRoutes();
+        this.checkCredentialsAndShowBadge();
     }
 
     async loadRoutes() {
@@ -282,6 +283,9 @@ class RoutesManager {
             });
 
             if (response.ok) {
+                // Hide the credentials badge since we just updated settings
+                this.hideCredentialsBadge();
+                
                 // Show success and restart message
                 Swal.fire({
                     title: 'Settings Updated!',
@@ -340,6 +344,53 @@ class RoutesManager {
             allowOutsideClick: true,
             allowEscapeKey: true
         });
+    }
+
+    async checkCredentialsAndShowBadge() {
+        try {
+            const response = await fetch('/settings');
+            if (response.ok) {
+                const settings = await response.json();
+                const instanceId = settings.instance_id?.trim() || '';
+                const token = settings.token?.trim() || '';
+                
+                if (!instanceId || !token) {
+                    this.showCredentialsBadge();
+                } else {
+                    this.hideCredentialsBadge();
+                }
+            }
+        } catch (error) {
+            console.log('Could not check credentials status:', error.message);
+        }
+    }
+
+    showCredentialsBadge() {
+        const settingsBtn = document.getElementById('settingsBtn');
+        if (!settingsBtn) return;
+
+        // Check if badge already exists
+        if (settingsBtn.querySelector('.credentials-badge')) return;
+
+        // Create badge element
+        const badge = document.createElement('span');
+        badge.className = 'credentials-badge';
+        badge.innerHTML = '!';
+        badge.title = 'Green API credentials not configured. Click Settings to configure.';
+
+        // Add badge to settings button
+        settingsBtn.style.position = 'relative';
+        settingsBtn.appendChild(badge);
+    }
+
+    hideCredentialsBadge() {
+        const settingsBtn = document.getElementById('settingsBtn');
+        if (!settingsBtn) return;
+
+        const badge = settingsBtn.querySelector('.credentials-badge');
+        if (badge) {
+            badge.remove();
+        }
     }
 
     renderRoutes() {
@@ -678,15 +729,79 @@ class RoutesManager {
     showModal() {
         if (!this.modal) {
             this.createModal();
+        } else {
+            // Complete cleanup of any existing Select2 instance
+            const chatIdSelect = $('#chatId');
+            if (chatIdSelect.hasClass('select2-hidden-accessible')) {
+                // Get the Select2 instance and clear everything
+                const select2Instance = chatIdSelect.data('select2');
+                if (select2Instance) {
+                    // Clear any internal caches
+                    if (select2Instance.dataAdapter && select2Instance.dataAdapter.cache) {
+                        select2Instance.dataAdapter.cache.clear();
+                    }
+                    if (select2Instance.results && select2Instance.results.clear) {
+                        select2Instance.results.clear();
+                    }
+                }
+                
+                chatIdSelect.select2('destroy');
+            }
+            
+            // Remove any lingering Select2 DOM elements
+            $('.select2-container').remove();
+            $('.select2-dropdown').remove();
+            
+            // Reset the select element completely
+            chatIdSelect.empty();
+            chatIdSelect.append('<option value="">Type to search contacts...</option>');
+            chatIdSelect.val('').trigger('change');
+            
+            // Reinitialize Select2 with a fresh instance
+            this.initializeChatIdSelect();
         }
+        
         this.modal.style.display = 'block';
         document.body.style.overflow = 'hidden';
+        
+        // Preload contacts when modal is shown
+        this.preloadContacts();
     }
 
     hideModal() {
         if (this.modal) {
             this.modal.style.display = 'none';
             document.body.style.overflow = 'auto';
+            
+            // Complete cleanup of Select2
+            const chatIdSelect = $('#chatId');
+            if (chatIdSelect.hasClass('select2-hidden-accessible')) {
+                // Get the Select2 instance and clear its cache
+                const select2Instance = chatIdSelect.data('select2');
+                if (select2Instance) {
+                    // Clear any internal caches
+                    if (select2Instance.dataAdapter && select2Instance.dataAdapter.cache) {
+                        select2Instance.dataAdapter.cache.clear();
+                    }
+                    if (select2Instance.results && select2Instance.results.clear) {
+                        select2Instance.results.clear();
+                    }
+                }
+                
+                // Destroy the Select2 instance
+                chatIdSelect.select2('destroy');
+                
+                // Clear the underlying select element completely
+                chatIdSelect.empty();
+                chatIdSelect.append('<option value="">Type to search contacts...</option>');
+                
+                // Reset the form field value
+                chatIdSelect.val('').trigger('change');
+                
+                // Remove any Select2 generated elements that might be lingering
+                $('.select2-container').remove();
+                $('.select2-dropdown').remove();
+            }
         }
     }
 
@@ -705,8 +820,10 @@ class RoutesManager {
                     </div>
                     <div class="form-group">
                         <label for="chatId">Chat ID:</label>
-                        <input type="text" id="chatId" name="chatId" required 
-                            placeholder="e.g., 972523531857@c.us">
+                        <select id="chatId" name="chatId" required style="width: 100%;">
+                            <option value="">Type to search contacts...</option>
+                        </select>
+                        <small class="form-text text-muted">Start typing a name or chat ID (minimum 3 characters)</small>
                     </div>
                     <div class="form-group">
                         <label>Webhook URLs:</label>
@@ -725,6 +842,161 @@ class RoutesManager {
         `;
         document.body.appendChild(this.modal);
         this.setupCreateModalListeners();
+        this.initializeChatIdSelect();
+    }
+
+    initializeChatIdSelect() {
+        const chatIdSelect = $('#chatId');
+        
+        chatIdSelect.select2({
+            placeholder: 'Type to search contacts...',
+            allowClear: true,
+            minimumInputLength: 3,
+            ajax: {
+                url: '/contacts/search',
+                dataType: 'json',
+                delay: 300,
+                data: function (params) {
+                    return {
+                        q: params.term,
+                        // Add timestamp to prevent caching issues
+                        _t: Date.now()
+                    };
+                },
+                processResults: function (data) {
+                    if (data.contacts && data.contacts.length > 0) {
+                        return {
+                            results: data.contacts.map(contact => ({
+                                id: contact.id, // Always use the chat ID as the value
+                                text: contact.display_text, // Show the formatted display text
+                                originalData: contact // Keep original data for reference
+                            }))
+                        };
+                    } else {
+                        return {
+                            results: [{
+                                id: '',
+                                text: data.message || 'No contacts found',
+                                disabled: true
+                            }]
+                        };
+                    }
+                },
+                cache: false // Disable caching completely
+            },
+            templateResult: function(contact) {
+                if (contact.loading) {
+                    return 'Searching...';
+                }
+                
+                if (contact.disabled) {
+                    return $('<span style="color: #999; font-style: italic;">' + contact.text + '</span>');
+                }
+                
+                // Create a formatted result with name highlighted and ID shown separately
+                const contactData = contact.originalData;
+                if (contactData) {
+                    const $result = $(`
+                        <div class="contact-result">
+                            <div class="contact-name">${contactData.name}</div>
+                            <div class="contact-id">${contactData.id}</div>
+                        </div>
+                    `);
+                    return $result;
+                } else {
+                    // Fallback for manually entered or simple results
+                    const $result = $(`
+                        <div class="contact-result">
+                            <div class="contact-name">${contact.text}</div>
+                        </div>
+                    `);
+                    return $result;
+                }
+            },
+            templateSelection: function(contact) {
+                // For the selected display, show the formatted text but the value remains the ID
+                if (contact.originalData) {
+                    return contact.originalData.display_text;
+                }
+                return contact.text || contact.id;
+            },
+            tags: true,
+            createTag: function (params) {
+                const term = $.trim(params.term);
+                
+                if (term === '') {
+                    return null;
+                }
+                
+                // Allow manual entry if it looks like a valid chat ID
+                if (term.includes('@') || term.match(/^\d+$/)) {
+                    return {
+                        id: term, // Use the entered term as both ID and display
+                        text: term,
+                        newTag: true
+                    };
+                }
+                
+                return null;
+            }
+        });
+
+        // Handle dropdown opening - focus on search input
+        chatIdSelect.on('select2:open', () => {
+            // Add a small delay to ensure the dropdown is fully rendered
+            setTimeout(() => {
+                const searchInput = $('.select2-search__field');
+                if (searchInput.length > 0) {
+                    searchInput[0].focus();
+                }
+            }, 50);
+        });
+
+        // Handle dropdown closing - clear any previous searches
+        chatIdSelect.on('select2:close', () => {
+            // Clear any cached search results
+            setTimeout(() => {
+                // Force clear the dropdown's internal cache
+                const select2Instance = chatIdSelect.data('select2');
+                if (select2Instance && select2Instance.dataAdapter) {
+                    // Clear the data adapter's cache if it exists
+                    if (select2Instance.dataAdapter.cache) {
+                        select2Instance.dataAdapter.cache.clear();
+                    }
+                }
+            }, 100);
+        });
+
+        // Remove the auto-fill functionality - no longer automatically fill card name
+        // chatIdSelect.on('select2:select', (e) => {
+        //     // Auto-fill functionality disabled
+        // });
+
+        // Show loading message when searching
+        chatIdSelect.on('select2:opening', () => {
+            this.showContactsLoading();
+        });
+    }
+
+    showContactsLoading() {
+        // Show a subtle loading indicator
+        const select2Container = $('.select2-container');
+        if (select2Container.length > 0) {
+            select2Container.addClass('loading');
+        }
+    }
+
+    async preloadContacts() {
+        try {
+            // Try to preload contacts in the background
+            const response = await fetch('/contacts');
+            if (response.ok) {
+                const data = await response.json();
+                console.log(`Preloaded ${data.contacts.length} contacts`, data.cached ? '(cached)' : '(fresh)');
+            }
+        } catch (error) {
+            console.log('Could not preload contacts:', error.message);
+        }
     }
 
     setupCreateModalListeners() {
@@ -784,8 +1056,21 @@ class RoutesManager {
 
     async handleFormSubmit(form) {
         const formData = new FormData(form);
-        const chatId = formData.get('chatId');
+        
+        // Get selected chat ID from Select2
+        const chatIdSelect = $('#chatId');
+        const chatId = chatIdSelect.val();
         const cardName = formData.get('cardName');
+        
+        if (!chatId || chatId.trim() === '') {
+            Swal.fire({
+                title: 'Error!',
+                text: 'Please select or enter a Chat ID.',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+            return;
+        }
         
         // Collect all webhook URLs
         const webhookInputs = form.querySelectorAll('.webhook-url-input');
@@ -838,7 +1123,7 @@ class RoutesManager {
         }
 
         const newRoute = {
-            chat_id: chatId,
+            chat_id: chatId.trim(),
             name: cardName,
             target_urls: webhookUrls
         };
@@ -867,7 +1152,29 @@ class RoutesManager {
                 // Reload routes from server
                 await this.loadRoutes();
                 this.hideModal();
+                
+                // Reset form completely
                 form.reset();
+                
+                // Complete cleanup and reset of Select2
+                const chatIdSelect = $('#chatId');
+                if (chatIdSelect.hasClass('select2-hidden-accessible')) {
+                    const select2Instance = chatIdSelect.data('select2');
+                    if (select2Instance) {
+                        // Clear all caches
+                        if (select2Instance.dataAdapter && select2Instance.dataAdapter.cache) {
+                            select2Instance.dataAdapter.cache.clear();
+                        }
+                        if (select2Instance.results && select2Instance.results.clear) {
+                            select2Instance.results.clear();
+                        }
+                    }
+                    chatIdSelect.select2('destroy');
+                }
+                
+                // Remove any lingering DOM elements
+                $('.select2-container').remove();
+                $('.select2-dropdown').remove();
                 
                 // Reset to single webhook input
                 const webhooksList = form.querySelector('#webhooksInputList');

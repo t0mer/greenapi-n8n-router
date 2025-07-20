@@ -13,6 +13,8 @@ import subprocess
 import time
 import re
 from typing import List
+import requests
+from datetime import datetime, timedelta
 
 CONFIG_PATH = "config/config.yaml"
 
@@ -474,3 +476,158 @@ def restart_bot():
     threading.Timer(0.5, perform_restart).start()
     
     return {"message": "Bot restart initiated (web server remains running)"}
+
+# Cache for contacts data
+contacts_cache = {
+    'data': None,
+    'timestamp': None,
+    'expires_minutes': 5
+}
+
+def is_cache_valid():
+    """Check if the contacts cache is still valid (within 5 minutes)"""
+    if contacts_cache['timestamp'] is None:
+        return False
+    
+    now = datetime.now()
+    cache_time = contacts_cache['timestamp']
+    return (now - cache_time).total_seconds() < (contacts_cache['expires_minutes'] * 60)
+
+@app.get("/contacts")
+async def get_contacts():
+    """
+    Retrieves contacts from Green API with 5-minute caching.
+    
+    Returns:
+        dict: List of contacts with id and name
+    """
+    global config, contacts_cache
+    
+    # Check cache first
+    if is_cache_valid() and contacts_cache['data'] is not None:
+        return {"contacts": contacts_cache['data'], "cached": True}
+    
+    # Reload config to get latest credentials
+    config = load_config(CONFIG_PATH)
+    
+    instance_id = config["green_api"].get("instance_id", "").strip()
+    token = config["green_api"].get("token", "").strip()
+    
+    if not instance_id or not token:
+        raise HTTPException(status_code=400, detail="Green API credentials not configured")
+    
+    try:
+        # Construct the Green API URL
+        url = f"https://7103.api.greenapi.com/waInstance{instance_id}/getContacts/{token}"
+        
+        # Make request to Green API
+        response = requests.get(url, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Transform the contacts data to a more usable format
+            contacts = []
+            for contact in data:
+                contact_id = contact.get('id', '')
+                contact_name = contact.get('name', contact_id)
+                
+                # Skip empty contacts
+                if contact_id:
+                    contacts.append({
+                        'id': contact_id,
+                        'name': contact_name,
+                        'display_text': f"{contact_name} ({contact_id})" if contact_name != contact_id else contact_id
+                    })
+            
+            # Sort contacts by name
+            contacts.sort(key=lambda x: x['name'].lower())
+            
+            # Update cache
+            contacts_cache['data'] = contacts
+            contacts_cache['timestamp'] = datetime.now()
+            
+            return {"contacts": contacts, "cached": False}
+        
+        else:
+            # Try to get error message from response
+            try:
+                error_data = response.json()
+                error_msg = error_data.get('message', f"HTTP {response.status_code}")
+            except:
+                error_msg = f"HTTP {response.status_code}"
+            
+            raise HTTPException(
+                status_code=response.status_code, 
+                detail=f"Green API error: {error_msg}"
+            )
+            
+    except requests.exceptions.Timeout:
+        raise HTTPException(status_code=408, detail="Request to Green API timed out")
+    except requests.exceptions.ConnectionError:
+        raise HTTPException(status_code=503, detail="Could not connect to Green API")
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching contacts: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.get("/contacts/search")
+async def search_contacts(q: str = ""):
+    """
+    Search contacts by name or ID with minimum 3 characters.
+    
+    Args:
+        q (str): Search query
+        
+    Returns:
+        dict: Filtered list of contacts
+    """
+    if len(q.strip()) < 3:
+        return {"contacts": [], "message": "Please enter at least 3 characters"}
+    
+    # Get all contacts (will use cache if available)
+    contacts_response = await get_contacts()
+    all_contacts = contacts_response["contacts"]
+    
+    # Filter contacts based on search query
+    query_lower = q.lower().strip()
+    filtered_contacts = []
+    
+    for contact in all_contacts:
+        # Search in both name and ID, but be more flexible with matching
+        name_match = query_lower in contact['name'].lower()
+        id_match = query_lower in contact['id'].lower()
+        
+        # Also check if query matches the display text
+        display_match = query_lower in contact['display_text'].lower()
+        
+        if name_match or id_match or display_match:
+            # Ensure the contact data is properly structured for Select2
+            filtered_contacts.append({
+                'id': contact['id'],  # Always the chat ID
+                'name': contact['name'],
+                'display_text': contact['display_text']
+            })
+    
+    # Sort by relevance: exact name matches first, then ID matches, then partial matches
+    def sort_relevance(contact):
+        name_lower = contact['name'].lower()
+        id_lower = contact['id'].lower()
+        
+        # Exact matches get highest priority
+        if name_lower == query_lower or id_lower == query_lower:
+            return 0
+        # Starts with gets second priority
+        elif name_lower.startswith(query_lower) or id_lower.startswith(query_lower):
+            return 1
+        # Contains gets lowest priority
+        else:
+            return 2
+    
+    filtered_contacts.sort(key=sort_relevance)
+    
+    return {
+        "contacts": filtered_contacts[:20],  # Limit to 20 results
+        "total": len(filtered_contacts),
+        "cached": contacts_response.get("cached", False)
+    }
