@@ -44,7 +44,7 @@ class ConnectionManager:
             for connection in self.active_connections:
                 try:
                     await connection.send_text(json.dumps(log_data))
-                except:
+                except Exception as e:
                     disconnected.append(connection)
             
             # Remove disconnected clients
@@ -100,6 +100,39 @@ def initialize_bot():
         try:
             new_bot = GreenAPIBot(instance_id, token)
             
+            # Helper functions for route_handler
+            def log_message_and_broadcast(message: str, level: str = "info"):
+                """Helper to log a message and broadcast it to websockets."""
+                logger.log(level, message)
+                manager.safe_broadcast_log(message, level)
+                
+            def get_route_info(route_data, chat_id):
+                """Parse route data and extract target URLs and route name."""
+                if isinstance(route_data, list):
+                    # Legacy format: [urls...]
+                    return route_data, chat_id
+                elif isinstance(route_data, dict):
+                    # New format: {name, target_urls}
+                    return route_data.get("target_urls", []), route_data.get("name", chat_id)
+                elif isinstance(route_data, str):
+                    # Single URL format
+                    return [route_data], chat_id
+                else:
+                    return [], chat_id
+            
+            async def forward_to_webhook(url: str, chat_id: str, payload: dict):
+                """Forward notification to a webhook URL."""
+                async with httpx.AsyncClient() as client:
+                    try:
+                        await client.post(
+                            url,
+                            json={"chatId": chat_id, "payload": payload},
+                            timeout=5.0
+                        )
+                        log_message_and_broadcast(f"✅ Forwarded to {url}", "success")
+                    except Exception as e:
+                        log_message_and_broadcast(f"❌ Error forwarding to {url}: {e}", "error")
+                
             @new_bot.router.message()
             def route_handler(notification: Notification) -> None:
                 """
@@ -113,65 +146,22 @@ def initialize_bot():
                 route_data = routes.get(chat_id)
 
                 if not route_data:
-                    log_message = f"🚫 No routes for chatId: {chat_id}"
-                    logger.warning(log_message)
-                    manager.safe_broadcast_log(log_message, "warning")
+                    log_message_and_broadcast(f"🚫 No routes for chatId: {chat_id}", "warning")
                     return
 
-                # Handle both legacy and new format
-                if isinstance(route_data, list):
-                    # Legacy format: [urls...]
-                    target_urls = route_data
-                    route_name = chat_id
-                elif isinstance(route_data, dict):
-                    # New format: {name, target_urls}
-                    target_urls = route_data.get("target_urls", [])
-                    route_name = route_data.get("name", chat_id)
-                elif isinstance(route_data, str):
-                    # Single URL format
-                    target_urls = [route_data]
-                    route_name = chat_id
-                else:
-                    target_urls = []
-                    route_name = chat_id
-
+                # Get target URLs and route name
+                target_urls, route_name = get_route_info(route_data, chat_id)
+                
                 if not target_urls:
-                    log_message = f"🚫 No webhook URLs configured for {route_name} ({chat_id})"
-                    logger.warning(log_message)
-                    manager.safe_broadcast_log(log_message, "warning")
+                    log_message_and_broadcast(f"🚫 No webhook URLs configured for {route_name} ({chat_id})", "warning")
                     return
 
-                log_message = f"➡️ Forwarding from {route_name} ({chat_id}) to {len(target_urls)} webhook(s)"
-                logger.info(log_message)
-                manager.safe_broadcast_log(log_message, "info")
-
-                async def forward(url: str):
-                    """
-                    Sends the notification payload to the specified webhook URL.
-
-                    Args:
-                        url (str): The webhook URL to forward the payload to.
-                    """
-                    async with httpx.AsyncClient() as client:
-                        try:
-                            await client.post(
-                                url,
-                                json={
-                                    "chatId": chat_id,
-                                    "payload": notification.event
-                                },
-                                timeout=5.0
-                            )
-                            success_message = f"✅ Forwarded to {url}"
-                            logger.success(success_message)
-                            manager.safe_broadcast_log(success_message, "success")
-                        except Exception as e:
-                            error_message = f"❌ Error forwarding to {url}: {e}"
-                            logger.error(error_message)
-                            manager.safe_broadcast_log(error_message, "error")
-
+                log_message_and_broadcast(f"➡️ Forwarding from {route_name} ({chat_id}) to {len(target_urls)} webhook(s)")
+                
+                # Forward to each webhook
+                payload = notification.event
                 for url in target_urls:
-                    asyncio.run(forward(url))
+                    asyncio.run(forward_to_webhook(url, chat_id, payload))
             
             log_message = f"🟢 Bot initialized successfully with instance {instance_id}"
             logger.info(log_message)

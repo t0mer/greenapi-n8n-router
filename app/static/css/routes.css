@@ -112,12 +112,7 @@ body {
     word-break: break-all;
 }
 
-.header-controls {
-    display: flex;
-    align-items: flex-start;
-    gap: 5px;
-    flex-shrink: 0;
-}
+/* This duplicate header-controls is removed as it's already defined earlier */
 
 .edit-name-btn {
     background: none;
@@ -398,6 +393,7 @@ body {
         position: relative;
         justify-content: center;
         margin-top: 15px;
+        align-self: flex-end;
     }
     
     body {
@@ -424,10 +420,6 @@ body {
         min-width: 280px;
     }
 
-    .header-controls {
-        align-self: flex-end;
-    }
-    
     .card-name {
         font-size: 1.1rem;
     }
@@ -555,7 +547,7 @@ body {
 .webhook-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 5px;
 }
 
 .edit-webhook-btn,
@@ -584,27 +576,6 @@ body {
 .delete-webhook-btn:hover {
     background-color: #ffeaea;
     transform: scale(1.05);
-}
-
-.webhook-actions {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.edit-webhook-btn {
-    background: none;
-    border: none;
-    font-size: 1rem;
-    cursor: pointer;
-    padding: 5px;
-    border-radius: 4px;
-    transition: background-color 0.3s;
-    color: #666;
-}
-
-.edit-webhook-btn:hover {
-    background-color: #f0f0f0;
 }
 
 .webhook-edit-controls {
@@ -914,14 +885,12 @@ body {
     margin: 10px 0;
 }
 
-/* Enhanced loading spinner for restart */
-.loading-spinner {
+/* Use the enhanced spinner for restart status */
+.restart-status-container .loading-spinner {
     width: 40px;
     height: 40px;
     border: 4px solid #f3f3f3;
     border-top: 4px solid #2196F3;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
     display: inline-block;
 }
 
@@ -1033,22 +1002,6 @@ body {
     color: #666;
     margin-top: 2px;
     font-family: monospace;
-}
-
-.contact-result {
-    display: flex;
-    flex-direction: column;
-}
-
-.contact-name {
-    font-weight: 500;
-    color: #333;
-}
-
-.contact-id {
-    font-size: 12px;
-    color: #666;
-    margin-top: 2px;
 }
 
 .select2-container.loading::after {

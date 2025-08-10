@@ -16,7 +16,8 @@ def check_server_running(host='localhost', port=8000):
             s.settimeout(1)
             result = s.connect_ex((host, port))
             return result == 0
-    except:
+    except Exception as e:
+        print(f"Error checking server status: {e}")
         return False
 
 def main():
@@ -51,7 +52,7 @@ def main():
                 error_msg = response.text()
                 if error_msg:
                     print(f"   Error: {error_msg}")
-            except:
+            except Exception as e:
                 pass
             sys.exit(1)
             
