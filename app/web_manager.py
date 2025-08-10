@@ -15,8 +15,10 @@ import re
 from typing import List
 import requests
 from datetime import datetime, timedelta
+import httpx
 
 CONFIG_PATH = "config/config.yaml"
+ROUTE_NOT_FOUND_ERROR = "Route not found"
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -157,7 +159,7 @@ def update_route_ui(chat_id: str = Form(...), target_urls: str = Form(...)):
     
     target_urls_list = target_urls.split(",")
     if chat_id not in config["routes"]:
-        raise HTTPException(status_code=404, detail="Route not found")
+        raise HTTPException(status_code=404, detail=ROUTE_NOT_FOUND_ERROR)
     config["routes"][chat_id] = target_urls_list
 
     # Save updated config to file
@@ -176,7 +178,7 @@ def delete_route_ui(chat_id: str = Form(...)):
     config = load_config(CONFIG_PATH)
     
     if chat_id not in config["routes"]:
-        raise HTTPException(status_code=404, detail="Route not found")
+        raise HTTPException(status_code=404, detail=ROUTE_NOT_FOUND_ERROR)
     del config["routes"][chat_id]
 
     # Save updated config to file
@@ -255,7 +257,7 @@ def update_route(chat_id: str, route_update: RouteUpdate):
         config = load_config(CONFIG_PATH)
         
         if chat_id not in config["routes"]:
-            raise HTTPException(status_code=404, detail="Route not found")
+            raise HTTPException(status_code=404, detail=ROUTE_NOT_FOUND_ERROR)
         
         # Preserve existing name if not provided in update
         existing_route = config["routes"][chat_id]
@@ -294,7 +296,7 @@ def delete_route(chat_id: str):
     config = load_config(CONFIG_PATH)
     
     if chat_id not in config["routes"]:
-        raise HTTPException(status_code=404, detail="Route not found")
+        raise HTTPException(status_code=404, detail=ROUTE_NOT_FOUND_ERROR)
     
     del config["routes"][chat_id]
 
@@ -354,7 +356,7 @@ def update_card_name(chat_id: str, name_update: CardNameUpdate):
     config = load_config(CONFIG_PATH)
     
     if chat_id not in config["routes"]:
-        raise HTTPException(status_code=404, detail="Route not found")
+        raise HTTPException(status_code=404, detail=ROUTE_NOT_FOUND_ERROR)
     
     route_data = config["routes"][chat_id]
     
@@ -561,8 +563,9 @@ async def fetch_contacts_from_api(instance_id, token):
     url = f"https://7103.api.greenapi.com/waInstance{instance_id}/getContacts/{token}"
     
     try:
-        # Make request to Green API
-        response = requests.get(url, timeout=10)
+        # Make async request to Green API
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=10.0)
         
         if response.status_code == 200:
             data = response.json()
@@ -579,11 +582,11 @@ async def fetch_contacts_from_api(instance_id, token):
             status_code=response.status_code, 
             detail=f"Green API error: {error_msg}"
         )
-    except requests.exceptions.Timeout:
+    except httpx.TimeoutException:
         raise HTTPException(status_code=408, detail="Request to Green API timed out")
-    except requests.exceptions.ConnectionError:
+    except httpx.ConnectError:
         raise HTTPException(status_code=503, detail="Could not connect to Green API")
-    except requests.exceptions.RequestException as e:
+    except httpx.RequestError as e:
         raise HTTPException(status_code=500, detail=f"Error fetching contacts: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")

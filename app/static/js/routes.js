@@ -773,35 +773,40 @@ class RoutesManager {
             this.modal.style.display = 'none';
             document.body.style.overflow = 'auto';
             
-            // Complete cleanup of Select2
-            const chatIdSelect = $('#chatId');
-            if (chatIdSelect.hasClass('select2-hidden-accessible')) {
-                // Get the Select2 instance and clear its cache
-                const select2Instance = chatIdSelect.data('select2');
-                if (select2Instance) {
-                    // Clear any internal caches
-                    if (select2Instance.dataAdapter && select2Instance.dataAdapter.cache) {
-                        select2Instance.dataAdapter.cache.clear();
-                    }
-                    if (select2Instance.results && select2Instance.results.clear) {
-                        select2Instance.results.clear();
-                    }
+            // Clean up the Select2 component
+            this.cleanupSelect2();
+        }
+    }
+    
+    cleanupSelect2() {
+        // Complete cleanup of Select2
+        const chatIdSelect = $('#chatId');
+        if (chatIdSelect.hasClass('select2-hidden-accessible')) {
+            // Get the Select2 instance and clear its cache
+            const select2Instance = chatIdSelect.data('select2');
+            if (select2Instance) {
+                // Clear any internal caches
+                if (select2Instance.dataAdapter && select2Instance.dataAdapter.cache) {
+                    select2Instance.dataAdapter.cache.clear();
                 }
-                
-                // Destroy the Select2 instance
-                chatIdSelect.select2('destroy');
-                
-                // Clear the underlying select element completely
-                chatIdSelect.empty();
-                chatIdSelect.append('<option value="">Type to search contacts...</option>');
-                
-                // Reset the form field value
-                chatIdSelect.val('').trigger('change');
-                
-                // Remove any Select2 generated elements that might be lingering
-                $('.select2-container').remove();
-                $('.select2-dropdown').remove();
+                if (select2Instance.results && select2Instance.results.clear) {
+                    select2Instance.results.clear();
+                }
             }
+            
+            // Destroy the Select2 instance
+            chatIdSelect.select2('destroy');
+            
+            // Clear the underlying select element completely
+            chatIdSelect.empty();
+            chatIdSelect.append('<option value="">Type to search contacts...</option>');
+            
+            // Reset the form field value
+            chatIdSelect.val('').trigger('change');
+            
+            // Remove any Select2 generated elements that might be lingering
+            $('.select2-container').remove();
+            $('.select2-dropdown').remove();
         }
     }
 
@@ -1062,6 +1067,45 @@ class RoutesManager {
         const chatId = chatIdSelect.val();
         const cardName = formData.get('cardName');
         
+        if (!this.validateChatId(chatId)) {
+            return;
+        }
+        
+        // Collect and validate all webhook URLs
+        const { webhookUrls, isValid } = this.validateWebhookInputs(form);
+        if (!isValid) {
+            return;
+        }
+        
+        const newRoute = {
+            chat_id: chatId.trim(),
+            name: cardName,
+            target_urls: webhookUrls
+        };
+
+        if (this.chatIdAlreadyExists(newRoute.chat_id)) {
+            return;
+        }
+
+        try {
+            const success = await this.createRoute(newRoute);
+            if (success) {
+                await this.loadRoutes();
+                this.hideModal();
+                this.resetForm(form, cardName, webhookUrls.length);
+            }
+        } catch (error) {
+            console.error('Error creating route:', error);
+            Swal.fire({
+                title: 'Error!',
+                text: 'Failed to create route. Server may be unavailable.',
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+        }
+    }
+    
+    validateChatId(chatId) {
         if (!chatId || chatId.trim() === '') {
             Swal.fire({
                 title: 'Error!',
@@ -1069,10 +1113,12 @@ class RoutesManager {
                 icon: 'error',
                 confirmButtonColor: '#dc3545'
             });
-            return;
+            return false;
         }
-        
-        // Collect all webhook URLs
+        return true;
+    }
+    
+    validateWebhookInputs(form) {
         const webhookInputs = form.querySelectorAll('.webhook-url-input');
         const webhookUrls = [];
         const validationErrors = [];
@@ -1097,7 +1143,7 @@ class RoutesManager {
                 icon: 'error',
                 confirmButtonColor: '#dc3545'
             });
-            return;
+            return { webhookUrls, isValid: false };
         }
 
         if (webhookUrls.length === 0) {
@@ -1107,7 +1153,7 @@ class RoutesManager {
                 icon: 'error',
                 confirmButtonColor: '#dc3545'
             });
-            return;
+            return { webhookUrls, isValid: false };
         }
 
         // Check for duplicate URLs within the same route
@@ -1119,16 +1165,14 @@ class RoutesManager {
                 icon: 'warning',
                 confirmButtonColor: '#2196F3'
             });
-            return;
+            return { webhookUrls, isValid: false };
         }
-
-        const newRoute = {
-            chat_id: chatId.trim(),
-            name: cardName,
-            target_urls: webhookUrls
-        };
-
-        if (this.routes.find(route => route.id === newRoute.chat_id)) {
+        
+        return { webhookUrls, isValid: true };
+    }
+    
+    chatIdAlreadyExists(chatId) {
+        if (this.routes.find(route => route.id === chatId)) {
             Swal.fire({
                 title: 'Chat ID Already Exists!',
                 text: 'A route with this Chat ID already exists. Please choose a different Chat ID.',
@@ -1136,84 +1180,86 @@ class RoutesManager {
                 confirmButtonColor: '#2196F3',
                 confirmButtonText: 'OK'
             });
-            return;
+            return true;
         }
+        return false;
+    }
+    
+    async createRoute(newRoute) {
+        const response = await fetch('/routes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(newRoute)
+        });
 
-        try {
-            const response = await fetch('/routes', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(newRoute)
-            });
-
-            if (response.ok) {
-                // Reload routes from server
-                await this.loadRoutes();
-                this.hideModal();
-                
-                // Reset form completely
-                form.reset();
-                
-                // Complete cleanup and reset of Select2
-                const chatIdSelect = $('#chatId');
-                if (chatIdSelect.hasClass('select2-hidden-accessible')) {
-                    const select2Instance = chatIdSelect.data('select2');
-                    if (select2Instance) {
-                        // Clear all caches
-                        if (select2Instance.dataAdapter && select2Instance.dataAdapter.cache) {
-                            select2Instance.dataAdapter.cache.clear();
-                        }
-                        if (select2Instance.results && select2Instance.results.clear) {
-                            select2Instance.results.clear();
-                        }
-                    }
-                    chatIdSelect.select2('destroy');
-                }
-                
-                // Remove any lingering DOM elements
-                $('.select2-container').remove();
-                $('.select2-dropdown').remove();
-                
-                // Reset to single webhook input
-                const webhooksList = form.querySelector('#webhooksInputList');
-                webhooksList.innerHTML = `
-                    <div class="webhook-input-item">
-                        <input type="url" class="webhook-url-input" placeholder="https://your-n8n-instance.com/webhook/..." required>
-                        <button type="button" class="remove-webhook-input" title="Remove webhook">🗑️</button>
-                    </div>
-                `;
-                
-                // Setup validation for reset input
-                const resetInput = webhooksList.querySelector('.webhook-url-input');
-                this.setupUrlValidation(resetInput);
-                
-                Swal.fire({
-                    title: 'Success!',
-                    text: `Route "${cardName}" created successfully with ${webhookUrls.length} webhook${webhookUrls.length > 1 ? 's' : ''}!`,
-                    icon: 'success',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-            } else {
-                const error = await response.text();
-                Swal.fire({
-                    title: 'Error!',
-                    text: `Failed to create route: ${error}`,
-                    icon: 'error',
-                    confirmButtonColor: '#dc3545'
-                });
-            }
-        } catch (error) {
-            console.error('Error creating route:', error);
+        if (response.ok) {
+            return true;
+        } else {
+            const error = await response.text();
             Swal.fire({
                 title: 'Error!',
-                text: 'Failed to create route. Server may be unavailable.',
+                text: `Failed to create route: ${error}`,
                 icon: 'error',
                 confirmButtonColor: '#dc3545'
             });
+            return false;
         }
+    }
+    
+    resetForm(form, cardName, webhookCount) {
+        // Reset form completely
+        form.reset();
+        
+        // Complete cleanup and reset of Select2
+        const chatIdSelect = $('#chatId');
+        if (chatIdSelect.hasClass('select2-hidden-accessible')) {
+            this.resetSelect2(chatIdSelect);
+        }
+        
+        // Reset to single webhook input
+        this.resetWebhookInputs(form);
+        
+        Swal.fire({
+            title: 'Success!',
+            text: `Route "${cardName}" created successfully with ${webhookCount} webhook${webhookCount > 1 ? 's' : ''}!`,
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }
+    
+    resetSelect2(chatIdSelect) {
+        const select2Instance = chatIdSelect.data('select2');
+        if (select2Instance) {
+            // Clear all caches
+            if (select2Instance.dataAdapter && select2Instance.dataAdapter.cache) {
+                select2Instance.dataAdapter.cache.clear();
+            }
+            if (select2Instance.results && select2Instance.results.clear) {
+                select2Instance.results.clear();
+            }
+        }
+        chatIdSelect.select2('destroy');
+        
+        // Remove any lingering DOM elements
+        $('.select2-container').remove();
+        $('.select2-dropdown').remove();
+    }
+    
+    resetWebhookInputs(form) {
+        const webhooksList = form.querySelector('#webhooksInputList');
+        webhooksList.innerHTML = `
+            <div class="webhook-input-item">
+                <input type="url" class="webhook-url-input" placeholder="https://your-n8n-instance.com/webhook/..." required>
+                <button type="button" class="remove-webhook-input" title="Remove webhook">🗑️</button>
+            </div>
+        `;
+        
+        // Setup validation for reset input
+        const resetInput = webhooksList.querySelector('.webhook-url-input');
+        this.setupUrlValidation(resetInput);
     }
 
     openRouteDetails(chatId) {

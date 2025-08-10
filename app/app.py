@@ -88,6 +88,85 @@ config: Dict[str, Dict[str, List[str]]] = load_config(CONFIG_PATH)
 bot = None
 bot_thread = None
 
+# Helper functions for bot message handling
+def log_message_and_broadcast(message: str, level: str = "info"):
+    """Helper to log a message and broadcast it to websockets."""
+    # Map string levels to Loguru methods
+    if level == "info":
+        logger.info(message)
+    elif level == "warning":
+        logger.warning(message)
+    elif level == "error":
+        logger.error(message)
+    elif level == "success":
+        logger.success(message)
+    elif level == "debug":
+        logger.debug(message)
+    else:
+        logger.info(message)  # Default to info if level is unknown
+    
+    manager.safe_broadcast_log(message, level)
+
+def get_route_info(route_data, chat_id):
+    """Parse route data and extract target URLs and route name."""
+    if isinstance(route_data, list):
+        # Legacy format: [urls...]
+        return route_data, chat_id
+    elif isinstance(route_data, dict):
+        # New format: {name, target_urls}
+        return route_data.get("target_urls", []), route_data.get("name", chat_id)
+    elif isinstance(route_data, str):
+        # Single URL format
+        return [route_data], chat_id
+    else:
+        return [], chat_id
+
+async def forward_to_webhook(url: str, chat_id: str, payload: dict):
+    """Forward notification to a webhook URL."""
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.post(
+                url,
+                json={"chatId": chat_id, "payload": payload},
+                timeout=5.0
+            )
+            log_message_and_broadcast(f"✅ Forwarded to {url}", "success")
+        except Exception as e:
+            log_message_and_broadcast(f"❌ Error forwarding to {url}: {e}", "error")
+
+def process_incoming_message(notification: Notification):
+    """Process an incoming message and forward to configured webhooks."""
+    chat_id = notification.event["senderData"]["chatId"]
+    routes = config.get("routes", {})
+    route_data = routes.get(chat_id)
+
+    if not route_data:
+        log_message_and_broadcast(f"🚫 No routes for chatId: {chat_id}", "warning")
+        return
+
+    # Get target URLs and route name
+    target_urls, route_name = get_route_info(route_data, chat_id)
+    
+    if not target_urls:
+        log_message_and_broadcast(f"🚫 No webhook URLs configured for {route_name} ({chat_id})", "warning")
+        return
+
+    log_message_and_broadcast(f"➡️ Forwarding from {route_name} ({chat_id}) to {len(target_urls)} webhook(s)")
+    
+    # Forward to each webhook
+    payload = notification.event
+    for url in target_urls:
+        asyncio.run(forward_to_webhook(url, chat_id, payload))
+
+def setup_message_handler(bot_instance):
+    """Configure message handler for the bot."""
+    @bot_instance.router.message()
+    def route_handler(notification: Notification) -> None:
+        """Handles incoming messages and forwards to appropriate webhooks."""
+        process_incoming_message(notification)
+    
+    return bot_instance
+
 def initialize_bot():
     """Initialize the bot with current configuration."""
     global bot, config
@@ -96,100 +175,29 @@ def initialize_bot():
     instance_id = config["green_api"].get("instance_id", "").strip()
     token = config["green_api"].get("token", "").strip()
 
-    if instance_id and token:
-        try:
-            new_bot = GreenAPIBot(instance_id, token)
-            
-            # Helper functions for route_handler
-            def log_message_and_broadcast(message: str, level: str = "info"):
-                """Helper to log a message and broadcast it to websockets."""
-                # Map string levels to Loguru methods
-                if level == "info":
-                    logger.info(message)
-                elif level == "warning":
-                    logger.warning(message)
-                elif level == "error":
-                    logger.error(message)
-                elif level == "success":
-                    logger.success(message)
-                elif level == "debug":
-                    logger.debug(message)
-                else:
-                    logger.info(message)  # Default to info if level is unknown
-                
-                manager.safe_broadcast_log(message, level)
-                
-            def get_route_info(route_data, chat_id):
-                """Parse route data and extract target URLs and route name."""
-                if isinstance(route_data, list):
-                    # Legacy format: [urls...]
-                    return route_data, chat_id
-                elif isinstance(route_data, dict):
-                    # New format: {name, target_urls}
-                    return route_data.get("target_urls", []), route_data.get("name", chat_id)
-                elif isinstance(route_data, str):
-                    # Single URL format
-                    return [route_data], chat_id
-                else:
-                    return [], chat_id
-            
-            async def forward_to_webhook(url: str, chat_id: str, payload: dict):
-                """Forward notification to a webhook URL."""
-                async with httpx.AsyncClient() as client:
-                    try:
-                        await client.post(
-                            url,
-                            json={"chatId": chat_id, "payload": payload},
-                            timeout=5.0
-                        )
-                        log_message_and_broadcast(f"✅ Forwarded to {url}", "success")
-                    except Exception as e:
-                        log_message_and_broadcast(f"❌ Error forwarding to {url}: {e}", "error")
-                
-            @new_bot.router.message()
-            def route_handler(notification: Notification) -> None:
-                """
-                Handles incoming messages and forwards them to the appropriate webhooks.
-
-                Args:
-                    notification (Notification): The incoming message notification.
-                """
-                chat_id = notification.event["senderData"]["chatId"]
-                routes = config.get("routes", {})
-                route_data = routes.get(chat_id)
-
-                if not route_data:
-                    log_message_and_broadcast(f"🚫 No routes for chatId: {chat_id}", "warning")
-                    return
-
-                # Get target URLs and route name
-                target_urls, route_name = get_route_info(route_data, chat_id)
-                
-                if not target_urls:
-                    log_message_and_broadcast(f"🚫 No webhook URLs configured for {route_name} ({chat_id})", "warning")
-                    return
-
-                log_message_and_broadcast(f"➡️ Forwarding from {route_name} ({chat_id}) to {len(target_urls)} webhook(s)")
-                
-                # Forward to each webhook
-                payload = notification.event
-                for url in target_urls:
-                    asyncio.run(forward_to_webhook(url, chat_id, payload))
-            
-            log_message = f"🟢 Bot initialized successfully with instance {instance_id}"
-            logger.info(log_message)
-            manager.safe_broadcast_log(log_message, "success")
-            return new_bot
-            
-        except Exception as e:
-            log_message = f"❌ Failed to initialize GreenAPIBot: {e}"
-            logger.critical(log_message)
-            manager.safe_broadcast_log(log_message, "error")
-            return None
-    else:
+    if not instance_id or not token:
         log_message = "⚠️ Bot not started - Instance ID and Token not configured. Use Settings to configure."
         logger.warning(log_message)
         manager.safe_broadcast_log(log_message, "warning")
+        return None
+
+    try:
+        # Create bot instance
+        new_bot = GreenAPIBot(instance_id, token)
+        
+        # Configure message handler
+        new_bot = setup_message_handler(new_bot)
+        
+        # Log successful initialization
+        log_message = f"🟢 Bot initialized successfully with instance {instance_id}"
+        logger.info(log_message)
+        manager.safe_broadcast_log(log_message, "success")
+        return new_bot
+        
+    except Exception as e:
+        log_message = f"❌ Failed to initialize GreenAPIBot: {e}"
+        logger.critical(log_message)
+        manager.safe_broadcast_log(log_message, "error")
         return None
 
 def start_bot_thread(bot_instance):
