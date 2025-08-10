@@ -869,8 +869,14 @@ body {
     padding: 20px;
 }
 
+/* Spinner styling for restart status container */
 .restart-status-container .loading-spinner {
     margin: 20px auto;
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #2196F3;
+    display: inline-block;
 }
 
 #restart-status {
@@ -883,15 +889,6 @@ body {
     font-size: 14px;
     color: #666;
     margin: 10px 0;
-}
-
-/* Use the enhanced spinner for restart status */
-.restart-status-container .loading-spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #2196F3;
-    display: inline-block;
 }
 
 /* URL Validation Styles */
