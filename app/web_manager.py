@@ -456,7 +456,7 @@ def is_running_in_docker():
         # Check cgroup for Docker
         with open('/proc/1/cgroup', 'r') as f:
             return 'docker' in f.read().lower()
-    except:
+    except Exception as e:
         return False
 
 @app.post("/restart")
@@ -493,19 +493,44 @@ def is_cache_valid():
     cache_time = contacts_cache['timestamp']
     return (now - cache_time).total_seconds() < (contacts_cache['expires_minutes'] * 60)
 
-@app.get("/contacts")
-async def get_contacts():
+def format_contacts_data(data):
     """
-    Retrieves contacts from Green API with 5-minute caching.
+    Transform the raw contacts data to a more usable format.
+    
+    Args:
+        data: Raw contacts data from API
+        
+    Returns:
+        list: Formatted contacts list
+    """
+    contacts = []
+    for contact in data:
+        contact_id = contact.get('id', '')
+        contact_name = contact.get('name', contact_id)
+        
+        # Skip empty contacts
+        if contact_id:
+            contacts.append({
+                'id': contact_id,
+                'name': contact_name,
+                'display_text': f"{contact_name} ({contact_id})" if contact_name != contact_id else contact_id
+            })
+    
+    # Sort contacts by name
+    contacts.sort(key=lambda x: x['name'].lower())
+    return contacts
+
+def get_green_api_credentials():
+    """
+    Get and validate Green API credentials from config.
     
     Returns:
-        dict: List of contacts with id and name
+        tuple: (instance_id, token)
+        
+    Raises:
+        HTTPException: If credentials are not configured
     """
-    global config, contacts_cache
-    
-    # Check cache first
-    if is_cache_valid() and contacts_cache['data'] is not None:
-        return {"contacts": contacts_cache['data'], "cached": True}
+    global config
     
     # Reload config to get latest credentials
     config = load_config(CONFIG_PATH)
@@ -516,52 +541,44 @@ async def get_contacts():
     if not instance_id or not token:
         raise HTTPException(status_code=400, detail="Green API credentials not configured")
     
-    try:
-        # Construct the Green API URL
-        url = f"https://7103.api.greenapi.com/waInstance{instance_id}/getContacts/{token}"
+    return instance_id, token
+
+async def fetch_contacts_from_api(instance_id, token):
+    """
+    Fetch contacts from Green API.
+    
+    Args:
+        instance_id: Green API instance ID
+        token: Green API token
         
+    Returns:
+        list: Formatted contacts list
+        
+    Raises:
+        HTTPException: If request fails
+    """
+    # Construct the Green API URL
+    url = f"https://7103.api.greenapi.com/waInstance{instance_id}/getContacts/{token}"
+    
+    try:
         # Make request to Green API
         response = requests.get(url, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
-            
-            # Transform the contacts data to a more usable format
-            contacts = []
-            for contact in data:
-                contact_id = contact.get('id', '')
-                contact_name = contact.get('name', contact_id)
-                
-                # Skip empty contacts
-                if contact_id:
-                    contacts.append({
-                        'id': contact_id,
-                        'name': contact_name,
-                        'display_text': f"{contact_name} ({contact_id})" if contact_name != contact_id else contact_id
-                    })
-            
-            # Sort contacts by name
-            contacts.sort(key=lambda x: x['name'].lower())
-            
-            # Update cache
-            contacts_cache['data'] = contacts
-            contacts_cache['timestamp'] = datetime.now()
-            
-            return {"contacts": contacts, "cached": False}
+            return format_contacts_data(data)
         
-        else:
-            # Try to get error message from response
-            try:
-                error_data = response.json()
-                error_msg = error_data.get('message', f"HTTP {response.status_code}")
-            except:
-                error_msg = f"HTTP {response.status_code}"
-            
-            raise HTTPException(
-                status_code=response.status_code, 
-                detail=f"Green API error: {error_msg}"
-            )
-            
+        # Handle error response
+        try:
+            error_data = response.json()
+            error_msg = error_data.get('message', f"HTTP {response.status_code}")
+        except Exception as e:
+            error_msg = f"HTTP {response.status_code}"
+        
+        raise HTTPException(
+            status_code=response.status_code, 
+            detail=f"Green API error: {error_msg}"
+        )
     except requests.exceptions.Timeout:
         raise HTTPException(status_code=408, detail="Request to Green API timed out")
     except requests.exceptions.ConnectionError:
@@ -570,6 +587,30 @@ async def get_contacts():
         raise HTTPException(status_code=500, detail=f"Error fetching contacts: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.get("/contacts")
+async def get_contacts():
+    """
+    Retrieves contacts from Green API with 5-minute caching.
+    
+    Returns:
+        dict: List of contacts with id and name
+    """
+    global contacts_cache
+    
+    # Check cache first
+    if is_cache_valid() and contacts_cache['data'] is not None:
+        return {"contacts": contacts_cache['data'], "cached": True}
+    
+    # Get credentials and fetch contacts
+    instance_id, token = get_green_api_credentials()
+    contacts = await fetch_contacts_from_api(instance_id, token)
+    
+    # Update cache
+    contacts_cache['data'] = contacts
+    contacts_cache['timestamp'] = datetime.now()
+    
+    return {"contacts": contacts, "cached": False}
 
 @app.get("/contacts/search")
 async def search_contacts(q: str = ""):
