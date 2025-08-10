@@ -103,7 +103,20 @@ def initialize_bot():
             # Helper functions for route_handler
             def log_message_and_broadcast(message: str, level: str = "info"):
                 """Helper to log a message and broadcast it to websockets."""
-                logger.log(level, message)
+                # Map string levels to Loguru methods
+                if level == "info":
+                    logger.info(message)
+                elif level == "warning":
+                    logger.warning(message)
+                elif level == "error":
+                    logger.error(message)
+                elif level == "success":
+                    logger.success(message)
+                elif level == "debug":
+                    logger.debug(message)
+                else:
+                    logger.info(message)  # Default to info if level is unknown
+                
                 manager.safe_broadcast_log(message, level)
                 
             def get_route_info(route_data, chat_id):
