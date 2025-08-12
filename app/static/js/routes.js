@@ -740,31 +740,7 @@ class RoutesManager {
         if (!this.modal) {
             this.createModal();
         } else {
-            // Complete cleanup of any existing Select2 instance
-            const chatIdSelect = $('#chatId');
-            if (chatIdSelect.hasClass('select2-hidden-accessible')) {
-                // Get the Select2 instance and clear everything
-                const select2Instance = chatIdSelect.data('select2');
-                if (select2Instance) {
-                    // Clear any internal caches
-                    select2Instance.dataAdapter?.cache?.clear();
-                    select2Instance.results?.clear?.();
-                }
-                
-                chatIdSelect.select2('destroy');
-            }
-            
-            // Remove any lingering Select2 DOM elements
-            $('.select2-container').remove();
-            $('.select2-dropdown').remove();
-            
-            // Reset the select element completely
-            chatIdSelect.empty();
-            chatIdSelect.append('<option value="">Type to search contacts...</option>');
-            chatIdSelect.val('').trigger('change');
-            
-            // Reinitialize Select2 with a fresh instance
-            this.initializeChatIdSelect();
+            this.resetSelect2Component();
         }
         
         this.modal.style.display = 'block';
@@ -772,6 +748,31 @@ class RoutesManager {
         
         // Preload contacts when modal is shown
         this.preloadContacts();
+    }
+    
+    resetSelect2Component() {
+        // Complete cleanup of any existing Select2 instance
+        const chatIdSelect = $('#chatId');
+        if (chatIdSelect.hasClass('select2-hidden-accessible')) {
+            // Get the Select2 instance and clear everything
+            const select2Instance = chatIdSelect.data('select2');
+            select2Instance?.dataAdapter?.cache?.clear();
+            select2Instance?.results?.clear?.();
+            
+            chatIdSelect.select2('destroy');
+        }
+        
+        // Remove any lingering Select2 DOM elements
+        $('.select2-container').remove();
+        $('.select2-dropdown').remove();
+        
+        // Reset the select element completely
+        chatIdSelect.empty();
+        chatIdSelect.append('<option value="">Type to search contacts...</option>');
+        chatIdSelect.val('').trigger('change');
+        
+        // Reinitialize Select2 with a fresh instance
+        this.initializeChatIdSelect();
     }
 
     hideModal() {
