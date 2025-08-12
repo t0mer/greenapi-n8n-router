@@ -1565,17 +1565,20 @@ class RoutesManager {
     async deleteWebhook(webhookItem, route, modal, webhookIndex) {
         try {
             this.showDeletingToast();
-            
-            const updatedUrls = route.webhookUrls.filter((_, index) => index !== webhookIndex);
-            const success = await this.updateRouteWithNewUrls(route.id, updatedUrls);
-
-            if (success) {
-                this.updateRouteDataAfterDelete(route, webhookItem, modal, webhookIndex, updatedUrls);
-                this.showSuccessMessage('Deleted!', 'The webhook URL has been successfully deleted.');
-            }
+            await this.processWebhookDeletion(webhookItem, route, modal, webhookIndex);
         } catch (error) {
             console.error('Error deleting webhook:', error);
             this.showErrorMessage('Failed to delete webhook URL. Server may be unavailable.');
+        }
+    }
+    
+    async processWebhookDeletion(webhookItem, route, modal, webhookIndex) {
+        const updatedUrls = route.webhookUrls.filter((_, index) => index !== webhookIndex);
+        const success = await this.updateRouteWithNewUrls(route.id, updatedUrls);
+        
+        if (success) {
+            this.updateRouteDataAfterDelete(route, webhookItem, modal, webhookIndex, updatedUrls);
+            this.showSuccessMessage('Deleted!', 'The webhook URL has been successfully deleted.');
         }
     }
 
