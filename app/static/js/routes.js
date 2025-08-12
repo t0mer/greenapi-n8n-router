@@ -793,12 +793,8 @@ class RoutesManager {
             const select2Instance = chatIdSelect.data('select2');
             if (select2Instance) {
                 // Clear any internal caches
-                if (select2Instance.dataAdapter && select2Instance.dataAdapter.cache) {
-                    select2Instance.dataAdapter.cache.clear();
-                }
-                if (select2Instance.results && select2Instance.results.clear) {
-                    select2Instance.results.clear();
-                }
+                select2Instance.dataAdapter?.cache?.clear();
+                select2Instance.results?.clear?.();
             }
             
             // Destroy the Select2 instance
