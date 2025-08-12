@@ -741,17 +741,22 @@ class RoutesManager {
     }
 
     showModal() {
+        this.initializeModal();
+        this.displayModal();
+        this.preloadContacts();
+    }
+    
+    initializeModal() {
         if (!this.modal) {
             this.createModal();
         } else {
             this.resetSelect2Component();
         }
-        
+    }
+    
+    displayModal() {
         this.modal.style.display = 'block';
         document.body.style.overflow = 'hidden';
-        
-        // Preload contacts when modal is shown
-        this.preloadContacts();
     }
     
     resetSelect2Component() {
