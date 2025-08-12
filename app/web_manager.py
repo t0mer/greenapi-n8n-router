@@ -458,7 +458,7 @@ def is_running_in_docker():
         # Check cgroup for Docker
         with open('/proc/1/cgroup', 'r') as f:
             return 'docker' in f.read().lower()
-    except Exception as e:
+    except Exception:
         return False
 
 @app.post("/restart")
