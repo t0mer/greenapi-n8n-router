@@ -1555,85 +1555,103 @@ class RoutesManager {
 
     async deleteWebhook(webhookItem, route, modal, webhookIndex) {
         try {
-            // Show loading toast
-            Swal.fire({
-                title: 'Deleting...',
-                text: 'Please wait while we delete the webhook.',
-                allowOutsideClick: false,
-                allowEscapeKey: false,
-                showConfirmButton: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
-            });
-
-            // Create updated URLs array without the deleted webhook
+            this.showDeletingToast();
+            
             const updatedUrls = route.webhookUrls.filter((_, index) => index !== webhookIndex);
+            const success = await this.updateRouteWithNewUrls(route.id, updatedUrls);
 
-            const response = await fetch(`/routes/${route.id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    chat_id: route.id,
-                    target_urls: updatedUrls
-                })
-            });
-
-            if (response.ok) {
-                // Update the route in memory
-                route.webhookUrls = updatedUrls;
-                if (webhookIndex === 0 && updatedUrls.length > 0) {
-                    route.webhookUrl = updatedUrls[0]; // Update primary URL if we deleted the first one
-                }
-
-                // Remove the webhook item from the DOM
-                webhookItem.remove();
-
-                // Update the webhook count display
-                const totalWebhooksElement = modal.querySelector('.route-details p:last-child');
-                if (totalWebhooksElement) {
-                    totalWebhooksElement.innerHTML = `<strong>Total Webhooks:</strong> ${updatedUrls.length}`;
-                }
-
-                // Update the main card if this was the primary URL
-                if (webhookIndex === 0 && updatedUrls.length > 0) {
-                    this.updateCardDisplay(route.id, updatedUrls[0]);
-                }
-
-                // Update the card webhook count
-                const cardWebhookCount = document.querySelector(`[data-chat-id="${route.id}"] .webhook-count`);
-                if (cardWebhookCount) {
-                    cardWebhookCount.innerHTML = `📋 ${updatedUrls.length} webhook${updatedUrls.length > 1 ? 's' : ''}`;
-                }
-
-                // Show success message
-                Swal.fire({
-                    title: 'Deleted!',
-                    text: 'The webhook URL has been successfully deleted.',
-                    icon: 'success',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-            } else {
-                const error = await response.text();
-                Swal.fire({
-                    title: 'Error!',
-                    text: `Failed to delete webhook URL: ${error}`,
-                    icon: 'error',
-                    confirmButtonColor: '#dc3545'
-                });
+            if (success) {
+                this.updateRouteDataAfterDelete(route, webhookItem, modal, webhookIndex, updatedUrls);
+                this.showSuccessMessage('Deleted!', 'The webhook URL has been successfully deleted.');
             }
         } catch (error) {
             console.error('Error deleting webhook:', error);
-            Swal.fire({
-                title: 'Error!',
-                text: 'Failed to delete webhook URL. Server may be unavailable.',
-                icon: 'error',
-                confirmButtonColor: '#dc3545'
-            });
+            this.showErrorMessage('Failed to delete webhook URL. Server may be unavailable.');
         }
+    }
+
+    showDeletingToast() {
+        Swal.fire({
+            title: 'Deleting...',
+            text: 'Please wait while we delete the webhook.',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+    }
+
+    async updateRouteWithNewUrls(chatId, updatedUrls) {
+        const response = await fetch(`/routes/${chatId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                chat_id: chatId,
+                target_urls: updatedUrls
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            this.showErrorMessage(`Failed to delete webhook URL: ${error}`);
+            return false;
+        }
+
+        return true;
+    }
+
+    updateRouteDataAfterDelete(route, webhookItem, modal, webhookIndex, updatedUrls) {
+        // Update the route in memory
+        route.webhookUrls = updatedUrls;
+        
+        // Update primary URL if needed
+        if (webhookIndex === 0 && updatedUrls.length > 0) {
+            route.webhookUrl = updatedUrls[0];
+            this.updateCardDisplay(route.id, updatedUrls[0]);
+        }
+
+        // Remove the webhook item from the DOM
+        webhookItem.remove();
+
+        // Update UI elements
+        this.updateWebhookCountDisplay(modal, route.id, updatedUrls);
+    }
+
+    updateWebhookCountDisplay(modal, routeId, updatedUrls) {
+        // Update the webhook count in the modal
+        const totalWebhooksElement = modal.querySelector('.route-details p:last-child');
+        if (totalWebhooksElement) {
+            totalWebhooksElement.innerHTML = `<strong>Total Webhooks:</strong> ${updatedUrls.length}`;
+        }
+        
+        // Update the card webhook count
+        const cardWebhookCount = document.querySelector(`[data-chat-id="${routeId}"] .webhook-count`);
+        if (cardWebhookCount) {
+            cardWebhookCount.innerHTML = `📋 ${updatedUrls.length} webhook${updatedUrls.length > 1 ? 's' : ''}`;
+        }
+    }
+
+    showSuccessMessage(title, text) {
+        Swal.fire({
+            title: title,
+            text: text,
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }
+
+    showErrorMessage(text) {
+        Swal.fire({
+            title: 'Error!',
+            text: text,
+            icon: 'error',
+            confirmButtonColor: '#dc3545'
+        });
     }
 
     enableWebhookEdit(webhookItem) {
