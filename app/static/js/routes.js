@@ -304,8 +304,10 @@ class RoutesManager {
                         // Show quick restart completion message
                         this.showBotRestartMessage();
                     } catch (error) {
-                        console.log('Restart triggered, showing completion...');
-                        this.showBotRestartMessage();
+                        console.error('Error during restart:', error);
+                        // Still show restart message as the settings were saved successfully
+                        // But include info that there might have been an issue with the restart
+                        this.showBotRestartMessage(true);
                     }
                 }, 3000);
             } else {
@@ -328,18 +330,26 @@ class RoutesManager {
         }
     }
 
-    showBotRestartMessage() {
+    showBotRestartMessage(hadError = false) {
         // Show a quick message about bot restart
+        const htmlMessage = hadError ? `
+            <div style="text-align: center;">
+                <p>✅ Settings were saved successfully!</p>
+                <p>⚠️ There was an issue with the automatic restart.</p>
+                <p style="color: #666; font-size: 0.9em;">You may need to restart the bot manually if it's not working properly.</p>
+            </div>
+        ` : `
+            <div style="text-align: center;">
+                <p>✅ Bot component has been restarted successfully!</p>
+                <p style="color: #666; font-size: 0.9em;">Web interface remained online during the restart.</p>
+            </div>
+        `;
+        
         Swal.fire({
-            title: 'Bot Restarted!',
-            html: `
-                <div style="text-align: center;">
-                    <p>✅ Bot component has been restarted successfully!</p>
-                    <p style="color: #666; font-size: 0.9em;">Web interface remained online during the restart.</p>
-                </div>
-            `,
-            icon: 'success',
-            timer: 3000,
+            title: hadError ? 'Settings Updated' : 'Bot Restarted!',
+            html: htmlMessage,
+            icon: hadError ? 'warning' : 'success',
+            timer: hadError ? 5000 : 3000,
             showConfirmButton: false,
             allowOutsideClick: true,
             allowEscapeKey: true
@@ -737,12 +747,8 @@ class RoutesManager {
                 const select2Instance = chatIdSelect.data('select2');
                 if (select2Instance) {
                     // Clear any internal caches
-                    if (select2Instance.dataAdapter && select2Instance.dataAdapter.cache) {
-                        select2Instance.dataAdapter.cache.clear();
-                    }
-                    if (select2Instance.results && select2Instance.results.clear) {
-                        select2Instance.results.clear();
-                    }
+                    select2Instance.dataAdapter?.cache?.clear();
+                    select2Instance.results?.clear?.();
                 }
                 
                 chatIdSelect.select2('destroy');
