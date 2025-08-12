@@ -966,12 +966,8 @@ class RoutesManager {
             setTimeout(() => {
                 // Force clear the dropdown's internal cache
                 const select2Instance = chatIdSelect.data('select2');
-                if (select2Instance && select2Instance.dataAdapter) {
-                    // Clear the data adapter's cache if it exists
-                    if (select2Instance.dataAdapter.cache) {
-                        select2Instance.dataAdapter.cache.clear();
-                    }
-                }
+                // Clear the data adapter's cache if it exists
+                select2Instance?.dataAdapter?.cache?.clear();
             }, 100);
         });
 
@@ -1237,12 +1233,8 @@ class RoutesManager {
         const select2Instance = chatIdSelect.data('select2');
         if (select2Instance) {
             // Clear all caches
-            if (select2Instance.dataAdapter && select2Instance.dataAdapter.cache) {
-                select2Instance.dataAdapter.cache.clear();
-            }
-            if (select2Instance.results && select2Instance.results.clear) {
-                select2Instance.results.clear();
-            }
+            select2Instance.dataAdapter?.cache?.clear();
+            select2Instance.results?.clear?.();
         }
         chatIdSelect.select2('destroy');
         
