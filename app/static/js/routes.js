@@ -2058,7 +2058,9 @@ class RoutesManager {
         };
 
         this.loggerSocket.onerror = (error) => {
-            this.addLogEntry('WebSocket error: ' + error, 'error');
+            // Format the error properly to avoid [object Object] in log messages
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            this.addLogEntry(`WebSocket error: ${errorMsg}`, 'error');
             console.error('WebSocket error:', error);
         };
     }
