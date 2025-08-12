@@ -443,9 +443,13 @@ class RoutesManager {
         card.dataset.chatId = route.id;
         card.draggable = true;
 
-        const truncatedUrl = route.webhookUrl ? 
-            (route.webhookUrl.length > 45 ? route.webhookUrl.substring(0, 45) + '...' : route.webhookUrl) : 
-            'No webhook URL';
+        let truncatedUrl = 'No webhook URL';
+        
+        if (route.webhookUrl) {
+            truncatedUrl = route.webhookUrl.length > 45 
+                ? route.webhookUrl.substring(0, 45) + '...' 
+                : route.webhookUrl;
+        }
 
         card.innerHTML = `
             <div class="card-header">
