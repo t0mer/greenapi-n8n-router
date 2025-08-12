@@ -12,7 +12,7 @@ import threading
 import subprocess
 import time
 import re
-from typing import List
+from typing import List, Optional
 import requests
 from datetime import datetime, timedelta
 import httpx
@@ -65,7 +65,7 @@ def validate_webhook_url(url: str) -> str:
 class RouteCreate(BaseModel):
     chat_id: str
     target_urls: List[str]
-    name: str = None
+    name: Optional[str] = None
 
     @validator('target_urls')
     def validate_urls(cls, v):
@@ -89,7 +89,7 @@ class RouteCreate(BaseModel):
 class RouteUpdate(BaseModel):
     chat_id: str
     target_urls: List[str]
-    name: str = None
+    name: Optional[str] = None
 
     @validator('target_urls')
     def validate_urls(cls, v):
