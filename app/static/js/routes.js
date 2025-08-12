@@ -802,8 +802,12 @@ class RoutesManager {
             const select2Instance = chatIdSelect.data('select2');
             if (select2Instance) {
                 // Clear any internal caches
-                select2Instance.dataAdapter?.cache?.clear();
-                select2Instance.results?.clear?.();
+                if (select2Instance.dataAdapter && select2Instance.dataAdapter.cache) {
+                    select2Instance.dataAdapter.cache.clear();
+                }
+                if (select2Instance.results && select2Instance.results.clear) {
+                    select2Instance.results.clear();
+                }
             }
             
             // Destroy the Select2 instance
@@ -976,7 +980,9 @@ class RoutesManager {
                 // Force clear the dropdown's internal cache
                 const select2Instance = chatIdSelect.data('select2');
                 // Clear the data adapter's cache if it exists
-                select2Instance?.dataAdapter?.cache?.clear();
+                if (select2Instance && select2Instance.dataAdapter && select2Instance.dataAdapter.cache) {
+                    select2Instance.dataAdapter.cache.clear();
+                }
             }, 100);
         });
 
@@ -1242,7 +1248,9 @@ class RoutesManager {
         const select2Instance = chatIdSelect.data('select2');
         if (select2Instance) {
             // Clear all caches
-            select2Instance.dataAdapter?.cache?.clear();
+            if (select2Instance.dataAdapter && select2Instance.dataAdapter.cache) {
+                select2Instance.dataAdapter.cache.clear();
+            }
             select2Instance.results?.clear?.();
         }
         chatIdSelect.select2('destroy');
