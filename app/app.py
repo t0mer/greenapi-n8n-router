@@ -44,7 +44,7 @@ class ConnectionManager:
             for connection in self.active_connections:
                 try:
                     await connection.send_text(json.dumps(log_data))
-                except Exception as e:
+                except Exception:
                     disconnected.append(connection)
             
             # Remove disconnected clients
@@ -60,7 +60,7 @@ class ConnectionManager:
                         self.broadcast_log(message, level), 
                         self.loop
                     )
-            except Exception as e:
+            except Exception:
                 # Silently ignore WebSocket broadcast errors
                 pass
 
