@@ -174,22 +174,24 @@ def initialize_bot():
     # Check if credentials are configured
     instance_id = config["green_api"].get("instance_id", "").strip()
     token = config["green_api"].get("token", "").strip()
+    prefix = config["green_api"].get("prefix", "7103").strip()
 
-    if not instance_id or not token:
-        log_message = "⚠️ Bot not started - Instance ID and Token not configured. Use Settings to configure."
+    if not instance_id or not token or not prefix:
+        log_message = "⚠️ Bot not started - Instance ID, Token, and Prefix not configured. Use Settings to configure."
         logger.warning(log_message)
         manager.safe_broadcast_log(log_message, "warning")
         return None
 
     try:
-        # Create bot instance
-        new_bot = GreenAPIBot(instance_id, token)
+        # Create bot instance with prefix-based host (include https:// scheme)
+        host = f"https://{prefix}.api.greenapi.com"
+        new_bot = GreenAPIBot(instance_id, token, host=host)
         
         # Configure message handler
         new_bot = setup_message_handler(new_bot)
         
         # Log successful initialization
-        log_message = f"🟢 Bot initialized successfully with instance {instance_id}"
+        log_message = f"🟢 Bot initialized successfully with instance {instance_id} on {host}"
         logger.info(log_message)
         manager.safe_broadcast_log(log_message, "success")
         return new_bot
@@ -280,14 +282,16 @@ def reload_config(new_config: Dict[str, Dict[str, List[str]]]) -> None:
     global config
     old_instance_id = config["green_api"].get("instance_id", "").strip()
     old_token = config["green_api"].get("token", "").strip()
+    old_prefix = config["green_api"].get("prefix", "7103").strip()
     
     config = new_config
     
     new_instance_id = config["green_api"].get("instance_id", "").strip()
     new_token = config["green_api"].get("token", "").strip()
+    new_prefix = config["green_api"].get("prefix", "7103").strip()
     
     # Check if credentials changed
-    if old_instance_id != new_instance_id or old_token != new_token:
+    if old_instance_id != new_instance_id or old_token != new_token or old_prefix != new_prefix:
         log_message = "🔧 Bot credentials changed, restarting bot..."
         logger.info(log_message)
         manager.safe_broadcast_log(log_message, "info")

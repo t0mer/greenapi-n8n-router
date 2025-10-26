@@ -218,6 +218,10 @@ class RoutesManager {
                             <label for="token" style="display: block; margin-bottom: 5px; font-weight: 500;">Token:</label>
                             <input id="token" class="swal2-input" type="password" placeholder="Enter Token" value="${settings.token || ''}" style="margin: 0;">
                         </div>
+                        <div style="margin-bottom: 15px;">
+                            <label for="prefix" style="display: block; margin-bottom: 5px; font-weight: 500;">Server Prefix:</label>
+                            <input id="prefix" class="swal2-input" placeholder="Enter Server Prefix (e.g., 7103)" value="${settings.prefix || '7103'}" style="margin: 0;">
+                        </div>
                         <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 14px;">
                             <p style="margin: 0; color: #666;">
                                 <strong>Note:</strong> Updating these settings will restart the entire application to apply changes.
@@ -233,18 +237,19 @@ class RoutesManager {
                 preConfirm: () => {
                     const instanceId = document.getElementById('instanceId').value.trim();
                     const token = document.getElementById('token').value.trim();
+                    const prefix = document.getElementById('prefix').value.trim();
                     
-                    if (!instanceId || !token) {
-                        Swal.showValidationMessage('Both Instance ID and Token are required');
+                    if (!instanceId || !token || !prefix) {
+                        Swal.showValidationMessage('Instance ID, Token, and Server Prefix are all required');
                         return false;
                     }
                     
-                    return { instanceId, token };
+                    return { instanceId, token, prefix };
                 }
             });
 
             if (formValues) {
-                await this.updateSettings(formValues.instanceId, formValues.token);
+                await this.updateSettings(formValues.instanceId, formValues.token, formValues.prefix);
             }
         } catch (error) {
             console.error('Error loading settings:', error);
@@ -257,7 +262,7 @@ class RoutesManager {
         }
     }
 
-    async updateSettings(instanceId, token) {
+    async updateSettings(instanceId, token, prefix) {
         try {
             // Show loading
             Swal.fire({
@@ -278,7 +283,8 @@ class RoutesManager {
                 },
                 body: JSON.stringify({
                     instance_id: instanceId,
-                    token: token
+                    token: token,
+                    prefix: prefix
                 })
             });
 
