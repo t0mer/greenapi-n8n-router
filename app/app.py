@@ -16,6 +16,7 @@ import concurrent.futures
 
 CONFIG_PATH = "config/config.yaml"
 
+
 # WebSocket connections manager
 class ConnectionManager:
     def __init__(self):
@@ -30,14 +31,14 @@ class ConnectionManager:
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        if (websocket in self.active_connections):
+        if websocket in self.active_connections:
             self.active_connections.remove(websocket)
 
     async def broadcast_log(self, message: str, level: str = "info"):
         log_data = {
             "timestamp": datetime.now().isoformat(),
             "level": level,
-            "message": message
+            "message": message,
         }
         if self.active_connections:
             disconnected = []
@@ -46,7 +47,7 @@ class ConnectionManager:
                     await connection.send_text(json.dumps(log_data))
                 except Exception:
                     disconnected.append(connection)
-            
+
             # Remove disconnected clients
             for conn in disconnected:
                 self.active_connections.remove(conn)
@@ -57,14 +58,15 @@ class ConnectionManager:
             try:
                 if self.active_connections:  # Only schedule if there are connections
                     asyncio.run_coroutine_threadsafe(
-                        self.broadcast_log(message, level), 
-                        self.loop
+                        self.broadcast_log(message, level), self.loop
                     )
             except Exception:
                 # Silently ignore WebSocket broadcast errors
                 pass
 
+
 manager = ConnectionManager()
+
 
 # Add WebSocket endpoint to FastAPI app
 @app.websocket("/ws/logs")
@@ -72,13 +74,14 @@ async def websocket_logs(websocket: WebSocket):
     # Set the event loop for the manager when first WebSocket connects
     if manager.loop is None:
         manager.loop = asyncio.get_event_loop()
-    
+
     await manager.connect(websocket)
     try:
         while True:
             await websocket.receive_text()  # Keep connection alive
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
 
 ensure_config(CONFIG_PATH)  # 🛡️ Ensure file exists
 
@@ -87,6 +90,7 @@ config: Dict[str, Dict[str, List[str]]] = load_config(CONFIG_PATH)
 # Global bot reference
 bot = None
 bot_thread = None
+
 
 # Helper functions for bot message handling
 def log_message_and_broadcast(message: str, level: str = "info"):
@@ -104,8 +108,9 @@ def log_message_and_broadcast(message: str, level: str = "info"):
         logger.debug(message)
     else:
         logger.info(message)  # Default to info if level is unknown
-    
+
     manager.safe_broadcast_log(message, level)
+
 
 def get_route_info(route_data, chat_id):
     """Parse route data and extract target URLs and route name."""
@@ -121,18 +126,18 @@ def get_route_info(route_data, chat_id):
     else:
         return [], chat_id
 
+
 async def forward_to_webhook(url: str, chat_id: str, payload: dict):
     """Forward notification to a webhook URL."""
     async with httpx.AsyncClient() as client:
         try:
             await client.post(
-                url,
-                json={"chatId": chat_id, "payload": payload},
-                timeout=5.0
+                url, json={"chatId": chat_id, "payload": payload}, timeout=5.0
             )
             log_message_and_broadcast(f"✅ Forwarded to {url}", "success")
         except Exception as e:
             log_message_and_broadcast(f"❌ Error forwarding to {url}: {e}", "error")
+
 
 def process_incoming_message(notification: Notification):
     """Process an incoming message and forward to configured webhooks."""
@@ -146,31 +151,38 @@ def process_incoming_message(notification: Notification):
 
     # Get target URLs and route name
     target_urls, route_name = get_route_info(route_data, chat_id)
-    
+
     if not target_urls:
-        log_message_and_broadcast(f"🚫 No webhook URLs configured for {route_name} ({chat_id})", "warning")
+        log_message_and_broadcast(
+            f"🚫 No webhook URLs configured for {route_name} ({chat_id})", "warning"
+        )
         return
 
-    log_message_and_broadcast(f"➡️ Forwarding from {route_name} ({chat_id}) to {len(target_urls)} webhook(s)")
-    
+    log_message_and_broadcast(
+        f"➡️ Forwarding from {route_name} ({chat_id}) to {len(target_urls)} webhook(s)"
+    )
+
     # Forward to each webhook
     payload = notification.event
     for url in target_urls:
         asyncio.run(forward_to_webhook(url, chat_id, payload))
 
+
 def setup_message_handler(bot_instance):
     """Configure message handler for the bot."""
+
     @bot_instance.router.message()
     def route_handler(notification: Notification) -> None:
         """Handles incoming messages and forwards to appropriate webhooks."""
         process_incoming_message(notification)
-    
+
     return bot_instance
+
 
 def initialize_bot():
     """Initialize the bot with current configuration."""
     global bot, config
-    
+
     # Check if credentials are configured
     instance_id = config["green_api"].get("instance_id", "").strip()
     token = config["green_api"].get("token", "").strip()
@@ -186,21 +198,24 @@ def initialize_bot():
         # Create bot instance with prefix-based host (include https:// scheme)
         host = f"https://{prefix}.api.greenapi.com"
         new_bot = GreenAPIBot(instance_id, token, host=host)
-        
+
         # Configure message handler
         new_bot = setup_message_handler(new_bot)
-        
+
         # Log successful initialization
-        log_message = f"🟢 Bot initialized successfully with instance {instance_id} on {host}"
+        log_message = (
+            f"🟢 Bot initialized successfully with instance {instance_id} on {host}"
+        )
         logger.info(log_message)
         manager.safe_broadcast_log(log_message, "success")
         return new_bot
-        
+
     except Exception as e:
         log_message = f"❌ Failed to initialize GreenAPIBot: {e}"
         logger.critical(log_message)
         manager.safe_broadcast_log(log_message, "error")
         return None
+
 
 def start_bot_thread(bot_instance):
     """Start the bot in a separate thread."""
@@ -210,36 +225,37 @@ def start_bot_thread(bot_instance):
         return thread
     return None
 
+
 def restart_bot_component():
     """Restart only the bot component."""
     global bot, bot_thread
-    
+
     log_message = "🔄 Restarting bot component..."
     logger.info(log_message)
     manager.safe_broadcast_log(log_message, "info")
-    
+
     # Stop existing bot if running
     if bot:
         try:
             log_message = "🛑 Stopping existing bot instance..."
             logger.info(log_message)
             manager.safe_broadcast_log(log_message, "info")
-            
+
             # Set bot to None to stop processing new messages
             bot = None
             bot_thread = None
-            
+
             # Give a moment for any ongoing operations to complete
             time.sleep(1)
-            
+
         except Exception as e:
             log_message = f"⚠️ Error stopping bot: {e}"
             logger.warning(log_message)
             manager.safe_broadcast_log(log_message, "warning")
-    
+
     # Small delay to ensure clean shutdown
     time.sleep(0.5)
-    
+
     # Reload configuration
     global config
     try:
@@ -252,12 +268,12 @@ def restart_bot_component():
         logger.error(log_message)
         manager.safe_broadcast_log(log_message, "error")
         return
-    
+
     # Initialize new bot with updated config
     try:
         bot = initialize_bot()
         bot_thread = start_bot_thread(bot)
-        
+
         if bot:
             log_message = "✅ Bot restarted successfully"
             logger.info(log_message)
@@ -266,11 +282,12 @@ def restart_bot_component():
             log_message = "❌ Bot restart failed or bot not configured"
             logger.error(log_message)
             manager.safe_broadcast_log(log_message, "error")
-            
+
     except Exception as e:
         log_message = f"❌ Error during bot restart: {e}"
         logger.error(log_message)
         manager.safe_broadcast_log(log_message, "error")
+
 
 def reload_config(new_config: Dict[str, Dict[str, List[str]]]) -> None:
     """
@@ -283,15 +300,19 @@ def reload_config(new_config: Dict[str, Dict[str, List[str]]]) -> None:
     old_instance_id = config["green_api"].get("instance_id", "").strip()
     old_token = config["green_api"].get("token", "").strip()
     old_prefix = config["green_api"].get("prefix", "7103").strip()
-    
+
     config = new_config
-    
+
     new_instance_id = config["green_api"].get("instance_id", "").strip()
     new_token = config["green_api"].get("token", "").strip()
     new_prefix = config["green_api"].get("prefix", "7103").strip()
-    
+
     # Check if credentials changed
-    if old_instance_id != new_instance_id or old_token != new_token or old_prefix != new_prefix:
+    if (
+        old_instance_id != new_instance_id
+        or old_token != new_token
+        or old_prefix != new_prefix
+    ):
         log_message = "🔧 Bot credentials changed, restarting bot..."
         logger.info(log_message)
         manager.safe_broadcast_log(log_message, "info")
@@ -301,7 +322,9 @@ def reload_config(new_config: Dict[str, Dict[str, List[str]]]) -> None:
         logger.info(log_message)
         manager.safe_broadcast_log(log_message, "info")
 
+
 start_config_watcher(CONFIG_PATH, reload_config)
+
 
 def run_web_manager():
     """
@@ -313,7 +336,9 @@ def run_web_manager():
         server.run()
     except OSError as e:
         if "address already in use" in str(e).lower():
-            log_message = "⚠️ Port 8000 already in use - web server may already be running"
+            log_message = (
+                "⚠️ Port 8000 already in use - web server may already be running"
+            )
             logger.warning(log_message)
             manager.safe_broadcast_log(log_message, "warning")
         else:
@@ -325,16 +350,19 @@ def run_web_manager():
         logger.error(log_message)
         manager.safe_broadcast_log(log_message, "error")
 
+
 # Check if we should start the web server (avoid starting if already running)
 def is_port_in_use(port):
     """Check if a port is already in use."""
     import socket
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
-            s.bind(('0.0.0.0', port))
+            s.bind(("0.0.0.0", port))
             return False
         except OSError:
             return True
+
 
 # Initialize bot
 bot = initialize_bot()
