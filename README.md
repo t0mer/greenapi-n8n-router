@@ -119,7 +119,7 @@ Edit `app/config/config.yaml`:
 green_api:
   instance_id: 'YOUR_INSTANCE_ID'
   token: 'YOUR_TOKEN_HERE'
-
+  prefix: 'YOUR_API_PREFIX_HERE'
 routes:
   # Single webhook per chat
   972523531857@c.us:
@@ -143,6 +143,7 @@ routes:
 |-------|-------------|---------|
 | `green_api.instance_id` | Your Green API instance ID | `7103251345` |
 | `green_api.token` | Your Green API token | `c4e60a46f75f...` |
+| `green_api.prefix` | Your Green API url prefix | `7103` for `7103.api.greenapi.com/waInstance...` |
 | `routes` | Chat ID to webhook URL mappings | See examples above |
 
 ## 🎯 Usage
@@ -152,7 +153,7 @@ Navigate to `http://localhost:8000` to access the management dashboard.
 
 ### 2. **Configure Green API Settings**
 - Click the "⚙️ Settings" button
-- Enter your Instance ID and Token
+- Enter your Instance ID, Token and API Prefix
 - Click "Update & Restart" - only the bot component restarts
 
 ### 3. **Manage Routes**
@@ -252,6 +253,7 @@ Content-Type: application/json
 {
   "instance_id": "your_instance_id",
   "token": "your_token"
+  "prefix": "your_api_prefix"
 }
 ```
 
@@ -386,8 +388,8 @@ Automatic configuration reloading without restart:
 ```python
 def reload_config(new_config):
     global config
-    old_credentials = (config["green_api"]["instance_id"], config["green_api"]["token"])
-    new_credentials = (new_config["green_api"]["instance_id"], new_config["green_api"]["token"])
+    old_credentials = (config["green_api"]["instance_id"], config["green_api"]["token"], config["green_api"]["prefix"])
+    new_credentials = (new_config["green_api"]["instance_id"], new_config["green_api"]["token"], new_config["green_api"]["prefix"])
     
     config = new_config
     
@@ -454,7 +456,7 @@ docker-compose ps
 ```
 
 #### Green API Issues
-- Ensure `instance_id` and `token` are correct
+- Ensure `instance_id`, `token` and `prefix` are correct
 - Verify Green API account is active
 - Check webhook URLs are accessible from the internet
 - Test webhooks manually with curl/Postman
