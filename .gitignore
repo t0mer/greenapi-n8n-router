@@ -3,6 +3,7 @@ CLAUDE.md
 .claude/
 .cursor/
 .aider*
+.superpowers/
 
 # Design / implementation / planning docs — local only
 /docs/
