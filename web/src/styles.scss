@@ -1,0 +1,50 @@
+@use '@angular/material' as mat;
+
+// Dark theme (default)
+$dark-theme: mat.define-theme((
+  color: (
+    theme-type: dark,
+    primary: mat.$green-palette,
+    tertiary: mat.$cyan-palette,
+  ),
+  density: (scale: 0),
+));
+
+// Light theme
+$light-theme: mat.define-theme((
+  color: (
+    theme-type: light,
+    primary: mat.$green-palette,
+    tertiary: mat.$cyan-palette,
+  ),
+  density: (scale: 0),
+));
+
+html {
+  @include mat.all-component-themes($dark-theme);
+  color-scheme: dark;
+}
+
+// Override only color tokens for light theme — avoids duplicate typography/density
+html.light-theme {
+  @include mat.all-component-colors($light-theme);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+}
+
+mat-tab-group {
+  height: calc(100vh - 64px);
+
+  .mat-mdc-tab-body-wrapper {
+    flex: 1;
+    overflow: auto;
+  }
+}

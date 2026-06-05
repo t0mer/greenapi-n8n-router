@@ -3,6 +3,7 @@ CLAUDE.md
 .claude/
 .cursor/
 .aider*
+.superpowers/
 
 # Design / implementation / planning docs — local only
 /docs/
@@ -48,3 +49,9 @@ build/
 # Logs
 *.log
 npm-debug.log*
+
+# Angular build + dev artifacts
+app/static/dist/
+web/node_modules/
+web/.angular/
+web/dist/
