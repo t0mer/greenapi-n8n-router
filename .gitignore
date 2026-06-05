@@ -39,6 +39,8 @@ build/
 *.db-journal
 *.sqlite
 *.sqlite3
+config/config.yaml
+app/config/config.yaml
 
 # Editor / OS
 .idea/
