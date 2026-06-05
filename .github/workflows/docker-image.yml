@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version (leave blank to auto-compute YYYY.M.PATCH)"
+        description: "Version in {year}.{month}.{patch} format (leave blank to auto-compute)"
         required: false
 
 jobs:
@@ -20,16 +20,16 @@ jobs:
 
       - name: Resolve version
         id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION="${{ github.event.inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
           else
-            TODAY="$(date +%Y.%-m)"
-            LATEST="$(git tag --list "${TODAY}.*" 2>/dev/null | sort -V | tail -1)"
-            if [ -z "$LATEST" ]; then VERSION="${TODAY}.0";
-            else PATCH="${LATEST##*.}"; VERSION="${TODAY}.$((PATCH + 1))"; fi
+            VERSION="$(./scripts/next-version.sh)"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${VERSION}"
 
       - name: Create and push tag
         run: |
