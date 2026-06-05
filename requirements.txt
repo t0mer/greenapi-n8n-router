@@ -11,3 +11,5 @@ sqlite-utils
 nest_asyncio
 python-multipart
 whatsapp_chatbot_python
+pydantic==2.9.2
+pydantic-settings==2.5.2
