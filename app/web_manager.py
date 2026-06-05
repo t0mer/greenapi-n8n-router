@@ -12,12 +12,14 @@ ensure_config(settings.config_path)
 
 app = FastAPI(title="Green API n8n Router", docs_url="/api/docs", redoc_url=None)
 
-# Angular 18 builder emits into a browser/ subdirectory inside outputPath
-_dist = Path("static/dist/browser")
+# Angular 18 builder emits into a browser/ subdirectory inside outputPath.
+# Use __file__ so the path is always relative to this module, regardless of CWD.
+_dist = Path(__file__).parent / "static" / "dist" / "browser"
 _dist_resolved = _dist.resolve()
 
-if _dist.is_dir() and (_dist / "assets").is_dir():
-    app.mount("/assets", StaticFiles(directory=str(_dist / "assets")), name="assets")
+if _dist.is_dir():
+    if (_dist / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_dist / "assets")), name="assets")
 
 app.include_router(api_router, prefix="/api/v1")
 
