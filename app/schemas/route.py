@@ -39,7 +39,6 @@ class RouteCreate(BaseModel):
 
 
 class RouteUpdate(BaseModel):
-    chat_id: str
     target_urls: list[str]
     name: Optional[str] = None
 
