@@ -10,6 +10,7 @@ import { ThemeService } from './core/services/theme.service';
 import { RoutesComponent } from './routes/routes.component';
 import { LogsComponent } from './logs/logs.component';
 import { SettingsComponent } from './settings/settings.component';
+import { AboutComponent } from './about/about.component';
 
 @Component({
   selector: 'app-root',
@@ -18,7 +19,7 @@ import { SettingsComponent } from './settings/settings.component';
     AsyncPipe,
     MatToolbarModule, MatTabsModule, MatIconModule,
     MatButtonModule, MatTooltipModule,
-    RoutesComponent, LogsComponent, SettingsComponent,
+    RoutesComponent, LogsComponent, SettingsComponent, AboutComponent,
   ],
   template: `
     <mat-toolbar color="primary">
@@ -43,6 +44,9 @@ import { SettingsComponent } from './settings/settings.component';
       </mat-tab>
       <mat-tab label="Settings">
         <app-settings />
+      </mat-tab>
+      <mat-tab label="About">
+        <app-about />
       </mat-tab>
     </mat-tab-group>
   `,

@@ -11,9 +11,11 @@ RUN npm run build
 # Stage 2: Python runtime with embedded Angular app
 FROM python:3.12-slim
 
+ARG VERSION=dev
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    ROUTER_APP_VERSION=${VERSION}
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
