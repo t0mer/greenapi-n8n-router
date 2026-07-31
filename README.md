@@ -12,25 +12,25 @@ A WhatsApp message router that forwards incoming messages to multiple n8n webhoo
 ## Screenshots
 
 ### Routes — Dark Mode
-![Routes Dark](assets/screenshots/routes-dark.png)
+![Routes Dark](https://raw.githubusercontent.com/t0mer/greenapi-n8n-router/main/assets/screenshots/routes-dark.png)
 
 ### Routes — Light Mode
-![Routes Light](assets/screenshots/routes-light.png)
+![Routes Light](https://raw.githubusercontent.com/t0mer/greenapi-n8n-router/main/assets/screenshots/routes-light.png)
 
 ### Add Route Dialog
-![Add Route](assets/screenshots/add-route-dark.png)
+![Add Route](https://raw.githubusercontent.com/t0mer/greenapi-n8n-router/main/assets/screenshots/add-route-dark.png)
 
 ### Logs Tab
-![Logs](assets/screenshots/logs-dark.png)
+![Logs](https://raw.githubusercontent.com/t0mer/greenapi-n8n-router/main/assets/screenshots/logs-dark.png)
 
 ### Settings Tab
-![Settings](assets/screenshots/settings-dark.png)
+![Settings](https://raw.githubusercontent.com/t0mer/greenapi-n8n-router/main/assets/screenshots/settings-dark.png)
 
 ### About Tab
-![About](assets/screenshots/about-dark.png)
+![About](https://raw.githubusercontent.com/t0mer/greenapi-n8n-router/main/assets/screenshots/about-dark.png)
 
 ### Mobile
-![Mobile](assets/screenshots/routes-mobile.png)
+![Mobile](https://raw.githubusercontent.com/t0mer/greenapi-n8n-router/main/assets/screenshots/routes-mobile.png)
 
 ---
 
