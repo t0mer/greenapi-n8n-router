@@ -1,6 +1,6 @@
 # Green API n8n Router
 
-A lightweight, self-hosted relay that receives incoming WhatsApp messages from a [Green API](https://green-api.com/) instance and forwards each one to one or more [n8n](https://n8n.io/) webhook URLs, chosen by the chat ID the message came from. Routes and credentials are managed from a built-in Angular web interface, so one WhatsApp number can drive many separate n8n workflows (per contact or per group) without touching n8n's own webhook settings.
+A lightweight, self-hosted relay that receives incoming WhatsApp messages from a [Green-API](https://green-api.com/) instance and forwards each one to one or more [n8n](https://n8n.io/) webhook URLs, chosen by the chat ID the message came from. Routes and credentials are managed from a built-in Angular web interface, so one WhatsApp number can drive many separate n8n workflows (per contact or per group) without touching n8n's own webhook settings.
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python)
 ![Angular](https://img.shields.io/badge/Angular-18-DD0031?style=flat-square&logo=angular)
@@ -62,12 +62,12 @@ A lightweight, self-hosted relay that receives incoming WhatsApp messages from a
 
 - **Route management**: map WhatsApp chat IDs (contacts `…@c.us` or groups `…@g.us`) to one or more n8n webhook URLs, each route with a friendly card name
 - **Fan-out**: a single incoming message is forwarded to every URL configured for its chat
-- **Contact search**: autocomplete from your Green API contact list when adding a route (type 3+ characters; results cached for 5 minutes)
+- **Contact search**: autocomplete from your Green-API contact list when adding a route (type 3+ characters; results cached for 5 minutes)
 - **URL validation**: only valid, non-duplicate `http://` / `https://` webhook URLs are accepted
 - **Hot reload**: route changes, whether made in the UI or by editing `config.yaml` directly, apply immediately without a restart
 - **Real-time logs**: live WebSocket log viewer showing message forwarding activity
 - **Bot restart from the UI**: apply new credentials without taking the web interface down (see [Troubleshooting](#troubleshooting) for a caveat)
-- **No inbound webhook needed**: messages are fetched from Green API by polling, so the router does not have to be reachable from the internet
+- **No inbound webhook needed**: messages are fetched from Green-API by polling, so the router does not have to be reachable from the internet
 - **Dark / light theme**: system-preference-aware toggle, persisted to `localStorage`
 - **Responsive**: works on desktop, tablet, and mobile
 - **REST API** with interactive Swagger docs at `/api/docs`
@@ -78,7 +78,7 @@ A lightweight, self-hosted relay that receives incoming WhatsApp messages from a
 
 ```mermaid
 flowchart LR
-    WA[WhatsApp] --> GA[Green API instance]
+    WA[WhatsApp] --> GA[Green-API instance]
     GA -- "receiveNotification (HTTP polling)" --> BOT
     subgraph Router["greenapi-n8n-router (port 8000)"]
         BOT[Bot thread<br/>whatsapp-chatbot-python] --> MATCH{Route for<br/>chatId?}
@@ -90,16 +90,16 @@ flowchart LR
     MATCH -- no --> LOG[Log: No routes for chatId]
 ```
 
-1. On startup the bot (built on [`whatsapp-chatbot-python`](https://github.com/green-api/whatsapp-chatbot-python)) connects to your Green API instance with the Instance ID and Token from `config.yaml` and starts **polling** Green API's HTTP API for notifications. If all message notifications are disabled on the instance, the library enables them automatically. It also clears any notifications already queued at startup.
+1. On startup the bot (built on [`whatsapp-chatbot-python`](https://github.com/green-api/whatsapp-chatbot-python)) connects to your Green-API instance with the Instance ID and Token from `config.yaml` and starts **polling** Green-API's HTTP API for notifications. If all message notifications are disabled on the instance, the library enables them automatically. It also clears any notifications already queued at startup.
 2. For every **incoming message** (`incomingMessageReceived`), the router reads `senderData.chatId` and looks it up in the `routes` section of the config.
-3. If a route exists, the full Green API notification is POSTed to each of the route's `target_urls` (one after another, 5-second timeout each, no retries). If no route matches, the message is dropped and a warning is logged. There is no default or catch-all route.
+3. If a route exists, the full Green-API notification is POSTed to each of the route's `target_urls` (one after another, 5-second timeout each, no retries). If no route matches, the message is dropped and a warning is logged. There is no default or catch-all route.
 4. The web server (FastAPI + Uvicorn on port `8000`) serves the Angular UI, the REST API, and the `/ws/logs` log stream. Every change made through the UI is written back to `config.yaml`, and a file watcher reloads the routes in the running bot. If the credentials change, a new bot is started. The previous bot thread is not stopped, so a full container restart is recommended after changing credentials.
 
 Outgoing messages (sent from your own phone or via the API) are **not** forwarded; only incoming messages are.
 
 ### Payload sent to n8n
 
-Each webhook receives a `POST` with a JSON body that wraps the original Green API notification:
+Each webhook receives a `POST` with a JSON body that wraps the original Green-API notification:
 
 ```json
 {
@@ -122,13 +122,13 @@ Each webhook receives a `POST` with a JSON body that wraps the original Green AP
 }
 ```
 
-`payload` is passed through unchanged, so its exact shape depends on the message type (text, image, location, and so on). See Green API's [incoming message notification docs](https://green-api.com/en/docs/api/receiving/notifications-format/incoming-message/) for every variant.
+`payload` is passed through unchanged, so its exact shape depends on the message type (text, image, location, and so on). See Green-API's [incoming message notification docs](https://green-api.com/en/docs/api/receiving/notifications-format/incoming-message/) for every variant.
 
 ---
 
 ## Requirements
 
-- A [Green API](https://green-api.com/) account with an authorized WhatsApp instance (Instance ID + API Token)
+- A [Green-API](https://green-api.com/) account with an authorized WhatsApp instance (Instance ID + API Token)
 - An n8n instance with one or more **Webhook** trigger nodes, reachable from the router
 - Docker (recommended), **or** Python 3.12 plus Node.js 20 to build the web UI from source
 
@@ -154,7 +154,7 @@ services:
 docker compose up -d
 ```
 
-Open `http://localhost:8000`, go to **Settings**, enter your Green API Instance ID and Token, and click **Save & Restart Bot**. Then add your routes in the **Routes** tab.
+Open `http://localhost:8000`, go to **Settings**, enter your Green-API Instance ID and Token, and click **Save & Restart Bot**. Then add your routes in the **Routes** tab.
 
 On first start the router creates `config/config.yaml` with empty credentials and one example route (`1234567890@c.us`). Delete or edit that route once you add your own.
 
@@ -193,7 +193,7 @@ When run natively, the config file is `app/config/config.yaml` (it is resolved r
 
 ### Config file (`config/config.yaml`)
 
-Green API credentials and routes are stored in `config/config.yaml` (inside the container: `/app/config/config.yaml`; mount it as a volume so it survives restarts). You normally manage it through the web UI, but you can also edit it by hand. Changes are picked up automatically.
+Green-API credentials and routes are stored in `config/config.yaml` (inside the container: `/app/config/config.yaml`; mount it as a volume so it survives restarts). You normally manage it through the web UI, but you can also edit it by hand. Changes are picked up automatically.
 
 ```yaml
 green_api:
@@ -215,9 +215,9 @@ routes:
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
-| `green_api.instance_id` | Yes | `""` | Green API instance ID. The bot does not start while this is empty. |
-| `green_api.token` | Yes | `""` | Green API instance API token. The bot does not start while this is empty. |
-| `green_api.api_url` | No | `https://api.green-api.com` | Green API base URL. Currently used **only** for the contact search in the UI; the message-polling bot always uses the default host. Omit the key to use the default (see [Troubleshooting](#troubleshooting)). Not editable in the UI. |
+| `green_api.instance_id` | Yes | `""` | Green-API instance ID. The bot does not start while this is empty. |
+| `green_api.token` | Yes | `""` | Green-API instance API token. The bot does not start while this is empty. |
+| `green_api.api_url` | No | `https://api.green-api.com` | Green-API base URL. Currently used **only** for the contact search in the UI; the message-polling bot always uses the default host. Omit the key to use the default (see [Troubleshooting](#troubleshooting)). Not editable in the UI. |
 | `routes.<chatId>` | No | example route | One entry per WhatsApp chat. The key is the chat ID: `<phone>@c.us` for a contact, `<id>@g.us` for a group. |
 | `routes.<chatId>.name` | No | the chat ID | Display name shown on the route card. |
 | `routes.<chatId>.target_urls` | Yes | — | List of webhook URLs to POST each message to. |
@@ -268,9 +268,9 @@ The router ignores the response body, but it waits for it: each POST has a 5-sec
 
 The UI is served at `http://<host>:8000` and has four tabs:
 
-- **Routes**: one card per chat ID showing its name and webhook URLs. Use the floating **+** button (or **Add Route** when the list is empty) to create a route. In the dialog, enter a card name, search your Green API contacts by name or number (3+ characters) or type a chat ID directly, and add one or more webhook URLs. Existing routes can be edited (the chat ID cannot be changed after creation) or deleted.
+- **Routes**: one card per chat ID showing its name and webhook URLs. Use the floating **+** button (or **Add Route** when the list is empty) to create a route. In the dialog, enter a card name, search your Green-API contacts by name or number (3+ characters) or type a chat ID directly, and add one or more webhook URLs. Existing routes can be edited (the chat ID cannot be changed after creation) or deleted.
 - **Logs**: a live stream of router activity over WebSocket (bot start/restart, config reloads, forwarded messages, errors). Logs are only shown while the page is open; use the clear button to empty the view.
-- **Settings**: enter the Green API Instance ID and Token and click **Save & Restart Bot**. This writes the credentials to `config.yaml` and starts a new bot; the web server keeps running. The old bot is not stopped, so restart the container afterwards (see [Troubleshooting](#troubleshooting)). A warning banner is shown while credentials are missing.
+- **Settings**: enter the Green-API Instance ID and Token and click **Save & Restart Bot**. This writes the credentials to `config.yaml` and starts a new bot; the web server keeps running. The old bot is not stopped, so restart the container afterwards (see [Troubleshooting](#troubleshooting)). A warning banner is shown while credentials are missing.
 - **About**: running version and project links.
 
 The theme toggle in the toolbar switches between dark and light mode.
@@ -293,7 +293,7 @@ All REST endpoints are under `/api/v1`. Interactive Swagger docs are served at `
 | GET | `/api/v1/settings` | Get credentials (token is masked as `••••••••`) |
 | POST | `/api/v1/settings` | Update credentials. Body: `{"instance_id": "…", "token": "…"}` |
 | POST | `/api/v1/restart` | Start a new bot component (the web server stays up; the previous bot is not stopped, see [Troubleshooting](#troubleshooting)) |
-| GET | `/api/v1/contacts` | List all Green API contacts: `{"contacts": [...], "cached": bool}` |
+| GET | `/api/v1/contacts` | List all Green-API contacts: `{"contacts": [...], "cached": bool}` |
 | GET | `/api/v1/contacts/search?q=…` | Search contacts by name or ID (min. 3 characters, max. 20 results) |
 | WS | `/ws/logs` | Real-time log stream. Each message: `{"timestamp": "…", "level": "info\|success\|warning\|error", "message": "…"}` |
 
@@ -311,9 +311,9 @@ curl -X POST http://localhost:8000/api/v1/routes \
 
 ## Security Notes
 
-- **No authentication.** The web UI, the REST API and the `/ws/logs` stream have no login or token. Anyone who can reach port 8000 can view and change routes, replace the Green API credentials, and read logs. The server always binds to `0.0.0.0` inside the container, so limit exposure with the Docker port mapping (for example `-p 127.0.0.1:8000:8000`), run it on a trusted network, or put it behind a reverse proxy with authentication. Do not expose it directly to the internet.
-- **No inbound exposure required.** The router polls Green API, so it only needs outbound HTTPS access to Green API and to your n8n webhooks.
-- **Credentials at rest.** The Green API token is stored in plain text in `config/config.yaml`. Protect the mounted `config/` directory and never commit it (it is already in `.gitignore`). The API returns the token masked.
+- **No authentication.** The web UI, the REST API and the `/ws/logs` stream have no login or token. Anyone who can reach port 8000 can view and change routes, replace the Green-API credentials, and read logs. The server always binds to `0.0.0.0` inside the container, so limit exposure with the Docker port mapping (for example `-p 127.0.0.1:8000:8000`), run it on a trusted network, or put it behind a reverse proxy with authentication. Do not expose it directly to the internet.
+- **No inbound exposure required.** The router polls Green-API, so it only needs outbound HTTPS access to Green-API and to your n8n webhooks.
+- **Credentials at rest.** The Green-API token is stored in plain text in `config/config.yaml`. Protect the mounted `config/` directory and never commit it (it is already in `.gitignore`). The API returns the token masked.
 - **Webhook payloads** contain full message content and sender phone numbers. Prefer `https://` n8n webhook URLs.
 
 ---
@@ -324,7 +324,7 @@ curl -X POST http://localhost:8000/api/v1/routes \
 - **"🚫 No routes for chatId: …"**: a message arrived from a chat with no route. Copy the chat ID from the log line and add a route for it.
 - **Saving Settings breaks the connection**: the Settings form is pre-filled with the masked token (`••••••••`). Always re-enter the real token before clicking **Save & Restart Bot**, or the masked value is saved as the token.
 - **Contact search returns nothing / errors**: check the credentials. If `api_url` is present in `config.yaml` but empty (`api_url: ""`), contact lookups fail; remove the key or set a full URL such as `https://7103.api.greenapi.com`.
-- **No messages arrive at all**: the bot uses Green API's HTTP API polling (`receiveNotification`), which does not deliver notifications while a **webhook URL** is set on the instance in the Green API console. Clear that field and wait about a minute for the change to apply.
+- **No messages arrive at all**: the bot uses Green-API's HTTP API polling (`receiveNotification`), which does not deliver notifications while a **webhook URL** is set on the instance in the Green-API console. Clear that field and wait about a minute for the change to apply.
 - **Duplicate forwards, or the old instance still being polled, after changing credentials**: saving Settings (and `POST /api/v1/restart`) starts a new bot but never stops the old bot thread, and a single save can start more than one extra bot. After changing credentials, restart the container (`docker restart greenapi-n8n-router`) or the native process.
 - **Messages sent while the router was down are missing**: pending notifications are cleared when the bot starts, so messages received during downtime are not forwarded.
 - **"✅ Forwarded to …" but the n8n workflow did not run**: the log reports that the request was sent, not that n8n accepted it (HTTP error responses are not checked). Make sure the workflow is **active** and you are using the Production URL.
